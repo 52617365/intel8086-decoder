@@ -34,55 +34,60 @@ fn get_reg_register(byte: u8, is_word_size: bool) -> &'static str {
 fn get_rm_register(byte: u8, is_word_size: bool, op: Operation) -> &'static str {
     const RM_MASK: u8 = 0b00_000_111; // this is used to get the contents of the R/M field
     let result = byte & RM_MASK;
-    match op {
-        Operation::REGISTER_MODE => {
-            if is_word_size {
-                return match result {
-                    0b00_000_000 => "ax",
-                    0b00_000_001 => "cx",
-                    0b00_000_010 => "dx",
-                    0b00_000_011 => "bx",
-                    0b00_000_100 => "sp",
-                    0b00_000_101 => "bp",
-                    0b00_000_110 => "si",
-                    0b00_000_111 => "di",
-                    _ => panic!("Unknown register"),
-                };
-            } else {
-                return match result {
-                    0b00_000_000 => "al",
-                    0b00_000_001 => "cl",
-                    0b00_000_010 => "dl",
-                    0b00_000_011 => "bl",
-                    0b00_000_100 => "ah",
-                    0b00_000_101 => "ch",
-                    0b00_000_110 => "dh",
-                    0b00_000_111 => "bh",
-                    _ => panic!("Unknown register"),
-                };
-            }
+    if op == Operation::REGISTER_MODE {
+        if is_word_size {
+            return match result {
+                0b00_000_000 => "ax",
+                0b00_000_001 => "cx",
+                0b00_000_010 => "dx",
+                0b00_000_011 => "bx",
+                0b00_000_100 => "sp",
+                0b00_000_101 => "bp",
+                0b00_000_110 => "si",
+                0b00_000_111 => "di",
+                _ => panic!("Unknown register"),
+            };
+        } else {
+            return match result {
+                0b00_000_000 => "al",
+                0b00_000_001 => "cl",
+                0b00_000_010 => "dl",
+                0b00_000_011 => "bl",
+                0b00_000_100 => "ah",
+                0b00_000_101 => "ch",
+                0b00_000_110 => "dh",
+                0b00_000_111 => "bh",
+                _ => panic!("Unknown register"),
+            };
         }
-        Operation::MEMORY_MODE_NONE | Operation::MEMORY_MODE_8 | Operation::MEMORY_MODE_16 => {
-            match result {
-                0b00_000_000 => "bx + si",
-                0b00_000_001 => "bx + di",
-                0b00_000_010 => "bp + si",
-                0b00_000_011 => "bp + di",
-                0b00_000_100 => "si",
-                0b00_000_101 => "di",
-                0b00_000_110 => "bp",
-                0b00_000_111 => "bx",
-                _ => panic!("unknwon instruction detected"),
+    } else {
+        match result {
+            0b00_000_000 => "bx + si",
+            0b00_000_001 => "bx + di",
+            0b00_000_010 => "bp + si",
+            0b00_000_011 => "bp + di",
+            0b00_000_100 => "si",
+            0b00_000_101 => "di",
+            0b00_000_110 => {
+                if op != Operation::MEMORY_MODE_DIRECT {
+                    "bp"
+                } else {
+                    "" // direct address instead of a register.
+                }
             }
+
+            0b00_000_111 => "bx",
+            _ => panic!("unknwon instruction detected"),
         }
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Operation {
-    REGISTER_MODE,    // no displacement
-    MEMORY_MODE_8,    // 8 bit displacement
-    MEMORY_MODE_16,   // 16 bit displacement
-    MEMORY_MODE_NONE, // No displacement expect if R/M is 110, then it's 16 bit direct address.
+    REGISTER_MODE,      // no displacement
+    MEMORY_MODE_8,      // 8 bit displacement
+    MEMORY_MODE_16,     // 16 bit displacement
+    MEMORY_MODE_NONE,   // No displacement expect if R/M is 110, then it's 16 bit direct address.
+    MEMORY_MODE_DIRECT, // 16 bit displacement into a direct memory address
 }
 
 fn get_mod_operation(second_byte: u8) -> Operation {
@@ -95,7 +100,7 @@ fn get_mod_operation(second_byte: u8) -> Operation {
             const RM_MASK: u8 = 0b_00_000_111; // we are masking the R/M bits here because (MOD = 00 + R/M 110) = 16 bit displacement.
             let res = second_byte & RM_MASK;
             if res == 0b_00_000_110 {
-                Operation::MEMORY_MODE_16
+                Operation::MEMORY_MODE_DIRECT
             } else {
                 Operation::MEMORY_MODE_NONE
             }
@@ -111,6 +116,7 @@ fn is_word_size(byte: u8) -> bool {
     const IS_WORD_SIZE_MASK: u8 = 0b000000_01; // This is the W bit and it's responsible for determining the size of the registers (8 or 16 bit).
     return byte & IS_WORD_SIZE_MASK != 0;
 }
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let binary_path = &args[1];
@@ -135,30 +141,48 @@ fn main() {
                 i += 1; // adding one to not go off course in the loop.
                 Some(displacement as usize)
             }
-            Operation::MEMORY_MODE_16 => {
+            Operation::MEMORY_MODE_16 | Operation::MEMORY_MODE_DIRECT => {
                 let first_byte = binary_contents[i + 2];
                 let second_byte = binary_contents[i + 3];
-                let combined: u16 = ((first_byte as u16) << 8) | (second_byte as u16);
+                let combined_bytes: u16 = ((second_byte as u16) << 8) | (first_byte as u16);
 
                 i += 2; // adding two to not go off course in the loop.
 
-                Some(combined as usize)
+                Some(combined_bytes as usize)
             }
             Operation::REGISTER_MODE | Operation::MEMORY_MODE_NONE => None,
         };
 
         if reg_is_dest {
             match disp {
-                Some(disp) => println!("mov {}, [{} + {}]", reg_register, rm_register, disp),
-                None => println!("mov {}, [{}]", reg_register, rm_register),
+                Some(disp) => {
+                    if op == Operation::MEMORY_MODE_DIRECT {
+                        println!("mov {}, [{}]", reg_register, disp);
+                    } else {
+                        println!("mov {}, [{} + {}]", reg_register, rm_register, disp);
+                    }
+                }
+                None => {
+                    if op == Operation::REGISTER_MODE {
+                        println!("mov {}, {}", reg_register, rm_register);
+                    } else {
+                        println!("mov {}, [{}]", reg_register, rm_register);
+                    }
+                }
             }
         } else {
             match disp {
                 Some(disp) => println!("mov [{} + {}], {}", rm_register, disp, reg_register),
-                None => println!("mov [{}], {}", rm_register, reg_register),
+                None => {
+                    if op == Operation::REGISTER_MODE {
+                        println!("mov {}, {}", rm_register, reg_register);
+                    } else {
+                        println!("mov [{}], {}", rm_register, reg_register);
+                    }
+                }
             }
         }
-        i += 2; // each iteration is 8 bits, a instruction is minimum 16 bits.
+        i += 2; // each iteration is 1 byte, a instruction is minimum 2 bytes.
     }
 }
 //   mov   _DW_MOD_REG_R/M
