@@ -76,31 +76,26 @@ fn get_rm_register(byte: u8, is_word_size: bool, op: Operation) -> &'static str 
     const RM_MASK: u8 = 0b00_000_111; // this is used to get the contents of the R/M field
     let result = byte & RM_MASK;
     if op == Operation::REGISTER_MODE {
-        if is_word_size {
-            return match result {
-                0b00_000_000 => "ax",
-                0b00_000_001 => "cx",
-                0b00_000_010 => "dx",
-                0b00_000_011 => "bx",
-                0b00_000_100 => "sp",
-                0b00_000_101 => "bp",
-                0b00_000_110 => "si",
-                0b00_000_111 => "di",
-                _ => panic!("Unknown register"),
-            };
-        } else {
-            return match result {
-                0b00_000_000 => "al",
-                0b00_000_001 => "cl",
-                0b00_000_010 => "dl",
-                0b00_000_011 => "bl",
-                0b00_000_100 => "ah",
-                0b00_000_101 => "ch",
-                0b00_000_110 => "dh",
-                0b00_000_111 => "bh",
-                _ => panic!("Unknown register"),
-            };
-        }
+        return match (is_word_size, result) {
+            (true, 0b00_000_000) => "ax",
+            (true, 0b00_000_001) => "cx",
+            (true, 0b00_000_010) => "dx",
+            (true, 0b00_000_011) => "bx",
+            (true, 0b00_000_100) => "sp",
+            (true, 0b00_000_101) => "bp",
+            (true, 0b00_000_110) => "si",
+            (true, 0b00_000_111) => "di",
+            //
+            (false, 0b00_000_000) => "al",
+            (false, 0b00_000_001) => "cl",
+            (false, 0b00_000_010) => "dl",
+            (false, 0b00_000_011) => "bl",
+            (false, 0b00_000_100) => "ah",
+            (false, 0b00_000_101) => "ch",
+            (false, 0b00_000_110) => "dh",
+            (false, 0b00_000_111) => "bh",
+            _ => panic!("Unknown register"),
+        };
     } else {
         match result {
             0b00_000_000 => "bx + si",
