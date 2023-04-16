@@ -1,569 +1,258 @@
 use core::panic;
 use std::{env, fs};
 
-fn get_instruction(byte: u16) -> &'static str {
-    return match byte & 0b100010_11_11_111_111 {
-        0b_100010_00_11_000_000 => "mov al, al\n",
-        0b_100010_00_11_000_001 => "mov cl, al\n",
-        0b_100010_00_11_000_010 => "mov dl, al\n",
-        0b_100010_00_11_000_011 => "mov bl, al\n",
-        0b_100010_00_11_000_100 => "mov ah, al\n",
-        0b_100010_00_11_000_101 => "mov ch, al\n",
-        0b_100010_00_11_000_110 => "mov dh, al\n",
-        0b_100010_00_11_000_111 => "mov bh, al\n",
-        //
-        0b_100010_00_11_001_000 => "mov al, cl\n",
-        0b_100010_00_11_001_001 => "mov cl, cl\n",
-        0b_100010_00_11_001_010 => "mov dl, cl\n",
-        0b_100010_00_11_001_011 => "mov bl, cl\n",
-        0b_100010_00_11_001_100 => "mov ah, cl\n",
-        0b_100010_00_11_001_101 => "mov ch, cl\n",
-        0b_100010_00_11_001_110 => "mov dh, cl\n",
-        0b_100010_00_11_001_111 => "mov bh, cl\n",
-        //
-        0b_100010_00_11_010_000 => "mov al, dl\n",
-        0b_100010_00_11_010_001 => "mov cl, dl\n",
-        0b_100010_00_11_010_010 => "mov dl, dl\n",
-        0b_100010_00_11_010_011 => "mov bl, dl\n",
-        0b_100010_00_11_010_100 => "mov ah, dl\n",
-        0b_100010_00_11_010_101 => "mov ch, dl\n",
-        0b_100010_00_11_010_110 => "mov dh, dl\n",
-        0b_100010_00_11_010_111 => "mov bh, dl\n",
-        //
-        0b_100010_00_11_011_000 => "mov al, bl\n",
-        0b_100010_00_11_011_001 => "mov cl, bl\n",
-        0b_100010_00_11_011_010 => "mov dl, bl\n",
-        0b_100010_00_11_011_011 => "mov bl, bl\n",
-        0b_100010_00_11_011_100 => "mov ah, bl\n",
-        0b_100010_00_11_011_101 => "mov ch, bl\n",
-        0b_100010_00_11_011_110 => "mov dh, bl\n",
-        0b_100010_00_11_011_111 => "mov bh, bl\n",
-        //
-        0b_100010_00_11_100_000 => "mov al, ah\n",
-        0b_100010_00_11_100_001 => "mov cl, ah\n",
-        0b_100010_00_11_100_010 => "mov dl, ah\n",
-        0b_100010_00_11_100_011 => "mov bl, ah\n",
-        0b_100010_00_11_100_100 => "mov ah, ah\n",
-        0b_100010_00_11_100_101 => "mov ch, ah\n",
-        0b_100010_00_11_100_110 => "mov dh, ah\n",
-        0b_100010_00_11_100_111 => "mov bh, ah\n",
-        //
-        0b_100010_00_11_101_000 => "mov al, ch\n",
-        0b_100010_00_11_101_001 => "mov cl, ch\n",
-        0b_100010_00_11_101_010 => "mov dl, ch\n",
-        0b_100010_00_11_101_011 => "mov bl, ch\n",
-        0b_100010_00_11_101_100 => "mov ah, ch\n",
-        0b_100010_00_11_101_101 => "mov ch, ch\n",
-        0b_100010_00_11_101_110 => "mov dh, ch\n",
-        0b_100010_00_11_101_111 => "mov bh, ch\n",
-        //
-        0b_100010_00_11_110_000 => "mov al, dh\n",
-        0b_100010_00_11_110_001 => "mov cl, dh\n",
-        0b_100010_00_11_110_010 => "mov dl, dh\n",
-        0b_100010_00_11_110_011 => "mov bl, dh\n",
-        0b_100010_00_11_110_100 => "mov ah, dh\n",
-        0b_100010_00_11_110_101 => "mov ch, dh\n",
-        0b_100010_00_11_110_110 => "mov dh, dh\n",
-        0b_100010_00_11_110_111 => "mov bh, dh\n",
-        //
-        0b_100010_00_11_111_000 => "mov al, bh\n",
-        0b_100010_00_11_111_001 => "mov cl, bh\n",
-        0b_100010_00_11_111_010 => "mov dl, bh\n",
-        0b_100010_00_11_111_011 => "mov bl, bh\n",
-        0b_100010_00_11_111_100 => "mov ah, bh\n",
-        0b_100010_00_11_111_101 => "mov ch, bh\n",
-        0b_100010_00_11_111_110 => "mov dh, bh\n",
-        0b_100010_00_11_111_111 => "mov bh, bh\n",
-        //
-        0b_100010_11_11_000_000 => "mov ax, ax\n",
-        0b_100010_11_11_000_001 => "mov ax, cx\n",
-        0b_100010_11_11_000_010 => "mov ax, dx\n",
-        0b_100010_11_11_000_011 => "mov ax, bx\n",
-        0b_100010_11_11_000_100 => "mov ax, sp\n",
-        0b_100010_11_11_000_101 => "mov ax, bp\n",
-        0b_100010_11_11_000_110 => "mov ax, si\n",
-        0b_100010_11_11_000_111 => "mov ax, di\n",
-        //
-        0b_100010_11_11_001_000 => "mov cx, ax\n",
-        0b_100010_11_11_001_001 => "mov cx, cx\n",
-        0b_100010_11_11_001_010 => "mov cx, dx\n",
-        0b_100010_11_11_001_011 => "mov cx, bx\n",
-        0b_100010_11_11_001_100 => "mov cx, sp\n",
-        0b_100010_11_11_001_101 => "mov cx, bp\n",
-        0b_100010_11_11_001_110 => "mov cx, si\n",
-        0b_100010_11_11_001_111 => "mov cx, di\n",
-        //
-        0b_100010_11_11_010_000 => "mov dx, ax\n",
-        0b_100010_11_11_010_001 => "mov dx, cx\n",
-        0b_100010_11_11_010_010 => "mov dx, dx\n",
-        0b_100010_11_11_010_011 => "mov dx, bx\n",
-        0b_100010_11_11_010_100 => "mov dx, sp\n",
-        0b_100010_11_11_010_101 => "mov dx, bp\n",
-        0b_100010_11_11_010_110 => "mov dx, si\n",
-        0b_100010_11_11_010_111 => "mov dx, di\n",
-        //
-        0b_100010_11_11_011_000 => "mov bx, ax\n",
-        0b_100010_11_11_011_001 => "mov bx, cx\n",
-        0b_100010_11_11_011_010 => "mov bx, dx\n",
-        0b_100010_11_11_011_011 => "mov bx, bx\n",
-        0b_100010_11_11_011_100 => "mov bx, sp\n",
-        0b_100010_11_11_011_101 => "mov bx, bp\n",
-        0b_100010_11_11_011_110 => "mov bx, si\n",
-        0b_100010_11_11_011_111 => "mov bx, di\n",
-        //
-        0b_100010_11_11_100_000 => "mov sp, ax\n",
-        0b_100010_11_11_100_001 => "mov sp, cx\n",
-        0b_100010_11_11_100_010 => "mov sp, dx\n",
-        0b_100010_11_11_100_011 => "mov sp, bx\n",
-        0b_100010_11_11_100_100 => "mov sp, sp\n",
-        0b_100010_11_11_100_101 => "mov sp, bp\n",
-        0b_100010_11_11_100_110 => "mov sp, si\n",
-        0b_100010_11_11_100_111 => "mov sp, di\n",
-        //
-        0b_100010_11_11_101_000 => "mov bp, ax\n",
-        0b_100010_11_11_101_001 => "mov bp, cx\n",
-        0b_100010_11_11_101_010 => "mov bp, dx\n",
-        0b_100010_11_11_101_011 => "mov bp, bx\n",
-        0b_100010_11_11_101_100 => "mov bp, sp\n",
-        0b_100010_11_11_101_101 => "mov bp, bp\n",
-        0b_100010_11_11_101_110 => "mov bp, si\n",
-        0b_100010_11_11_101_111 => "mov bp, di\n",
-        //
-        0b_100010_11_11_110_000 => "mov si, ax\n",
-        0b_100010_11_11_110_001 => "mov si, cx\n",
-        0b_100010_11_11_110_010 => "mov si, dx\n",
-        0b_100010_11_11_110_011 => "mov si, bx\n",
-        0b_100010_11_11_110_100 => "mov si, sp\n",
-        0b_100010_11_11_110_101 => "mov si, bp\n",
-        0b_100010_11_11_110_110 => "mov si, si\n",
-        0b_100010_11_11_110_111 => "mov si, di\n",
-        //
-        0b_100010_11_11_111_000 => "mov di, ax\n",
-        0b_100010_11_11_111_001 => "mov di, cx\n",
-        0b_100010_11_11_111_010 => "mov di, dx\n",
-        0b_100010_11_11_111_011 => "mov di, bx\n",
-        0b_100010_11_11_111_100 => "mov di, sp\n",
-        0b_100010_11_11_111_101 => "mov di, bp\n",
-        0b_100010_11_11_111_110 => "MOV DI, SI\n",
-        0b_100010_11_11_111_111 => "MOV DI, DI\n",
-        //
-        0b_100010_01_11_010_000 => "mov ax, dx\n",
-        0b_100010_01_11_010_001 => "mov cx, dx\n",
-        0b_100010_01_11_010_010 => "mov dx, dx\n",
-        0b_100010_01_11_010_011 => "mov bx, dx\n",
-        0b_100010_01_11_010_100 => "mov sp, dx\n",
-        0b_100010_01_11_010_101 => "mov bp, dx\n",
-        0b_100010_01_11_010_110 => "mov si, dx\n",
-        0b_100010_01_11_010_111 => "mov di, dx\n",
-        //
-        0b_100010_01_11_011_000 => "mov ax, bx\n",
-        0b_100010_01_11_011_001 => "mov cx, bx\n",
-        0b_100010_01_11_011_010 => "mov dx, bx\n",
-        0b_100010_01_11_011_011 => "mov bx, bx\n",
-        0b_100010_01_11_011_100 => "mov sp, bx\n",
-        0b_100010_01_11_011_101 => "mov bp, bx\n",
-        0b_100010_01_11_011_110 => "mov si, bx\n",
-        0b_100010_01_11_011_111 => "mov di, bx\n",
-        //
-        0b_100010_01_11_100_000 => "mov ax, sp\n",
-        0b_100010_01_11_100_001 => "mov cx, sp\n",
-        0b_100010_01_11_100_010 => "mov dx, sp\n",
-        0b_100010_01_11_100_011 => "mov bx, sp\n",
-        0b_100010_01_11_100_100 => "mov sp, sp\n",
-        0b_100010_01_11_100_101 => "mov bp, sp\n",
-        0b_100010_01_11_100_110 => "mov si, sp\n",
-        0b_100010_01_11_100_111 => "mov di, sp\n",
-        //
-        0b_100010_01_11_101_000 => "mov ax, bp\n",
-        0b_100010_01_11_101_001 => "mov cx, bp\n",
-        0b_100010_01_11_101_010 => "mov dx, bp\n",
-        0b_100010_01_11_101_011 => "mov bx, bp\n",
-        0b_100010_01_11_101_100 => "mov sp, bp\n",
-        0b_100010_01_11_101_101 => "mov bp, bp\n",
-        0b_100010_01_11_101_110 => "mov si, bp\n",
-        0b_100010_01_11_101_111 => "mov di, bp\n",
-        //
-        0b_100010_01_11_110_000 => "mov ax, si\n",
-        0b_100010_01_11_110_001 => "mov cx, si\n",
-        0b_100010_01_11_110_010 => "mov dx, si\n",
-        0b_100010_01_11_110_011 => "mov bx, si\n",
-        0b_100010_01_11_110_100 => "mov sp, si\n",
-        0b_100010_01_11_110_101 => "mov bp, si\n",
-        0b_100010_01_11_110_110 => "mov si, si\n",
-        0b_100010_01_11_110_111 => "mov di, si\n",
-        //
-        0b_100010_01_11_111_000 => "mov ax, di\n",
-        0b_100010_01_11_111_001 => "mov cx, di\n",
-        0b_100010_01_11_111_010 => "mov dx, di\n",
-        0b_100010_01_11_111_011 => "mov bx, di\n",
-        0b_100010_01_11_111_100 => "mov sp, di\n",
-        0b_100010_01_11_111_101 => "mov bp, di\n",
-        0b_100010_01_11_111_110 => "mov si, di\n",
-        0b_100010_01_11_111_111 => "mov di, di\n",
-        // REG IS DESTINATION FROM NOW ON + byte data.
-        0b_100010_10_11_010_000 => "mov dl, al\n",
-        0b_100010_10_11_010_001 => "mov dl, cl\n",
-        0b_100010_10_11_010_010 => "mov dl, dl\n",
-        0b_100010_10_11_010_011 => "mov dl, bl\n",
-        0b_100010_10_11_010_100 => "mov dl, ah\n",
-        0b_100010_10_11_010_101 => "mov dl, ch\n",
-        0b_100010_10_11_010_110 => "mov dl, dh\n",
-        0b_100010_10_11_010_111 => "mov dl, bh\n",
-        //
-        0b_100010_10_11_011_000 => "mov bl, al\n",
-        0b_100010_10_11_011_001 => "mov bl, cl\n",
-        0b_100010_10_11_011_010 => "mov bl, dl\n",
-        0b_100010_10_11_011_011 => "mov bl, bl\n",
-        0b_100010_10_11_011_100 => "mov bl, ah\n",
-        0b_100010_10_11_011_101 => "mov bl, ch\n",
-        0b_100010_10_11_011_110 => "mov bl, dh\n",
-        0b_100010_10_11_011_111 => "mov bl, bh\n",
-        //
-        0b_100010_10_11_100_000 => "mov ah, al\n",
-        0b_100010_10_11_100_001 => "mov ah, cl\n",
-        0b_100010_10_11_100_010 => "mov ah, dl\n",
-        0b_100010_10_11_100_011 => "mov ah, bl\n",
-        0b_100010_10_11_100_100 => "mov ah, ah\n",
-        0b_100010_10_11_100_101 => "mov ah, ch\n",
-        0b_100010_10_11_100_110 => "mov ah, dh\n",
-        0b_100010_10_11_100_111 => "mov ah, bh\n",
-        //
-        0b_100010_10_11_101_000 => "mov ch, al\n",
-        0b_100010_10_11_101_001 => "mov ch, cl\n",
-        0b_100010_10_11_101_010 => "mov ch, dl\n",
-        0b_100010_10_11_101_011 => "mov ch, bl\n",
-        0b_100010_10_11_101_100 => "mov ch, ah\n",
-        0b_100010_10_11_101_101 => "mov ch, ch\n",
-        0b_100010_10_11_101_110 => "mov ch, dh\n",
-        0b_100010_10_11_101_111 => "mov ch, bh\n",
-        //
-        0b_100010_10_11_110_000 => "mov dh, al\n",
-        0b_100010_10_11_110_001 => "mov dh, cl\n",
-        0b_100010_10_11_110_010 => "mov dh, dl\n",
-        0b_100010_10_11_110_011 => "mov dh, bl\n",
-        0b_100010_10_11_110_100 => "mov dh, ah\n",
-        0b_100010_10_11_110_101 => "mov dh, ch\n",
-        0b_100010_10_11_110_110 => "mov dh, dh\n",
-        0b_100010_10_11_110_111 => "mov dh, bh\n",
-        //
-        0b_100010_10_11_111_000 => "mov bh, al\n",
-        0b_100010_10_11_111_001 => "mov bh, cl\n",
-        0b_100010_10_11_111_010 => "mov bh, dl\n",
-        0b_100010_10_11_111_011 => "mov bh, bl\n",
-        0b_100010_10_11_111_100 => "mov bh, ah\n",
-        0b_100010_10_11_111_101 => "mov bh, ch\n",
-        0b_100010_10_11_111_110 => "mov bh, dh\n",
-        0b_100010_10_11_111_111 => "mov bh, bh\n",
-        //
-        0b_100010_01_11_000_011 => "mov bx, ax\n",
-        0b_100010_01_11_000_101 => "mov bp, ax\n",
-        _ => panic!("Unknown instruction: {:016b}\n", byte),
+// All the different instruction operations we're looking to handle at the moment.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Operation {
+    REGISTER_MODE,            // no displacement
+    MEMORY_MODE_8,            // 8 bit displacement
+    MEMORY_MODE_16,           // 16 bit displacement
+    MEMORY_MODE_NONE, // No displacement expect if R/M is 110, then it's 16 bit direct address.
+    MEMORY_MODE_DIRECT, // This is mod 00 with r/m 110 16 bit displacement into a direct memory address
+    IMMEDIATE_TO_REGISTER_8, // The first byte is set to 10110... and the instruction is 2 bytes wide. (last byte is the immediate)
+    IMMEDIATE_TO_REGISTER_16, // The first byte is set to 10111... and the instruction is 3 bytes wide. (last 2 bytes is the immediate)
+}
+
+fn get_reg_register(
+    first_byte: u8,
+    second_byte: u8,
+    is_word_size: bool,
+    op: Operation,
+) -> &'static str {
+    if op == Operation::IMMEDIATE_TO_REGISTER_16 || op == Operation::IMMEDIATE_TO_REGISTER_8 {
+        // Immediate to register reg field is in the first byte. Normally it's in the second byte.
+        // This is why we have to have separate logic for this case.
+        const IMMEDIATE_REG_MASK: u8 = 0b_00_000_111;
+
+        let mask_result = first_byte & IMMEDIATE_REG_MASK;
+
+        return match (is_word_size, mask_result) {
+            (true, 0b_00_000_000) => "ax",
+            (true, 0b_00_000_001) => "cx",
+            (true, 0b_00_000_010) => "dx",
+            (true, 0b_00_000_011) => "bx",
+            (true, 0b_00_000_100) => "sp",
+            (true, 0b_00_000_101) => "bp",
+            (true, 0b_00_000_110) => "si",
+            (true, 0b_00_000_111) => "di",
+            //
+            (false, 0b_00_000_000) => "al",
+            (false, 0b_00_000_001) => "cl",
+            (false, 0b_00_000_010) => "dl",
+            (false, 0b_00_000_011) => "bl",
+            (false, 0b_00_000_100) => "ah",
+            (false, 0b_00_000_101) => "ch",
+            (false, 0b_00_000_110) => "dh",
+            (false, 0b_00_000_111) => "bh",
+            _ => panic!("Unknown register"),
+        };
+    } else {
+        const REGISTER_MEMORY_REG_MASK: u8 = 0b00_111_000; // this is only used for register to register / memory to register and vica verca operations.
+        let result = second_byte & REGISTER_MEMORY_REG_MASK;
+        return match (is_word_size, result) {
+            (true, 0b00_000_000) => "ax",
+            (true, 0b00_001_000) => "cx",
+            (true, 0b00_010_000) => "dx",
+            (true, 0b00_011_000) => "bx",
+            (true, 0b00_100_000) => "sp",
+            (true, 0b00_101_000) => "bp",
+            (true, 0b00_110_000) => "si",
+            (true, 0b00_111_000) => "di",
+            //
+            (false, 0b00_000_000) => "al",
+            (false, 0b00_001_000) => "cl",
+            (false, 0b00_010_000) => "dl",
+            (false, 0b00_011_000) => "bl",
+            (false, 0b00_100_000) => "ah",
+            (false, 0b00_101_000) => "ch",
+            (false, 0b00_110_000) => "dh",
+            (false, 0b00_111_000) => "bh",
+            _ => panic!("Unknown register"),
+        };
+    }
+}
+
+fn get_rm_register(byte: u8, is_word_size: bool, op: Operation) -> &'static str {
+    const RM_MASK: u8 = 0b00_000_111; // this is used to get the contents of the R/M field
+    let result = byte & RM_MASK;
+    if op == Operation::REGISTER_MODE {
+        if is_word_size {
+            return match result {
+                0b00_000_000 => "ax",
+                0b00_000_001 => "cx",
+                0b00_000_010 => "dx",
+                0b00_000_011 => "bx",
+                0b00_000_100 => "sp",
+                0b00_000_101 => "bp",
+                0b00_000_110 => "si",
+                0b00_000_111 => "di",
+                _ => panic!("Unknown register"),
+            };
+        } else {
+            return match result {
+                0b00_000_000 => "al",
+                0b00_000_001 => "cl",
+                0b00_000_010 => "dl",
+                0b00_000_011 => "bl",
+                0b00_000_100 => "ah",
+                0b00_000_101 => "ch",
+                0b00_000_110 => "dh",
+                0b00_000_111 => "bh",
+                _ => panic!("Unknown register"),
+            };
+        }
+    } else {
+        match result {
+            0b00_000_000 => "bx + si",
+            0b00_000_001 => "bx + di",
+            0b00_000_010 => "bp + si",
+            0b00_000_011 => "bp + di",
+            0b00_000_100 => "si",
+            0b00_000_101 => "di",
+            0b00_000_110 => {
+                if op != Operation::MEMORY_MODE_DIRECT {
+                    "bp"
+                } else {
+                    "" // direct address instead of a register.
+                }
+            }
+
+            0b00_000_111 => "bx",
+            _ => panic!("unknwon instruction detected"),
+        }
+    }
+}
+
+// In this function we have to check both the first byte and second byte because the first byte determines the contents of the second byte.
+fn get_operation(first_byte: u8, second_byte: u8) -> Operation {
+    const IMMEDIATE_TO_REGISTER_MASK: u8 = 0b_11111000;
+    const MOD_MASK: u8 = 0b_11_000_000;
+
+    return match (
+        first_byte & IMMEDIATE_TO_REGISTER_MASK,
+        second_byte & MOD_MASK,
+    ) {
+        (0b_1011_1000, _) => Operation::IMMEDIATE_TO_REGISTER_16, // 16 bit immediate to register because first byte is different from others and w bit is set to 1.
+        (0b_1011_0000, _) => Operation::IMMEDIATE_TO_REGISTER_8, // 8 bit immediate to register because first byte is different from others and w bit is set to 0.
+        (_, 0b_11_000_000) => Operation::REGISTER_MODE,
+        (_, 0b_01_000_000) => Operation::MEMORY_MODE_8,
+        (_, 0b_10_000_000) => Operation::MEMORY_MODE_16,
+        (_, 0b_00_000_000) => {
+            const RM_MASK: u8 = 0b_00_000_111; // we are masking the R/M bits here because (MOD = 00 + R/M 110) = 16 bit displacement.
+            let res = second_byte & RM_MASK;
+            if res == 0b_00_000_110 {
+                Operation::MEMORY_MODE_DIRECT
+            } else {
+                Operation::MEMORY_MODE_NONE
+            }
+        }
+        _ => panic!("Unknown operation - get_operation line: {}", line!()),
     };
 }
-// };
+fn reg_is_dest(byte: u8) -> bool {
+    const DEST_REG_MASK: u8 = 0b000000_10; // This is the D bit specified after the instruction operand. It's responsible for specifying the destination and source register.
+    return byte & DEST_REG_MASK != 0;
+}
+fn is_word_size(byte: u8, op: Operation) -> bool {
+    if op == Operation::IMMEDIATE_TO_REGISTER_16 || op == Operation::IMMEDIATE_TO_REGISTER_8 {
+        const IMMEDIATE_TO_REGISTER_W_MASK: u8 = 0b0000_1_000; // This is the W bit of a memory to register, register to memory and register to register move and it's responsible for determining the size of the registers (8 or 16 bit).
+        return byte & IMMEDIATE_TO_REGISTER_W_MASK != 0;
+    } else {
+        const IS_WORD_SIZE_MASK: u8 = 0b000000_01; // This is the W bit of a memory to register, register to memory and register to register move and it's responsible for determining the size of the registers (8 or 16 bit).
+        return byte & IS_WORD_SIZE_MASK != 0;
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let binary_path = &args[1];
     let binary_contents = fs::read(binary_path).unwrap();
-    let instructions = binary_contents.chunks(2);
 
-    for inst in instructions {
-        let first_half = inst[0] as u16;
-        let second_half = inst[1] as u16;
+    let mut i: usize = 0;
+    while i < binary_contents.len() {
+        let first_byte = binary_contents[i];
+        let second_byte = binary_contents[i + 1];
 
-        let byte: u16 = (first_half) << 8;
+        let op = get_operation(first_byte, second_byte);
 
-        let combined_bytes = byte | second_half;
+        let reg_is_dest = reg_is_dest(first_byte);
+        let is_word_size = is_word_size(first_byte, op);
 
-        let inst = get_instruction(combined_bytes);
-        print!("{}", inst);
+        let reg_register = get_reg_register(first_byte, second_byte, is_word_size, op);
+        let rm_register = get_rm_register(second_byte, is_word_size, op);
+
+        let mut disp: Option<usize> = match op {
+            Operation::MEMORY_MODE_8 => {
+                let displacement = binary_contents[i + 2];
+                i += 1; // adding one to not go off course in the loop.
+                Some(displacement as usize)
+            }
+            Operation::MEMORY_MODE_16 | Operation::MEMORY_MODE_DIRECT => {
+                let third_byte = binary_contents[i + 2];
+                let fourth_byte = binary_contents[i + 3];
+                let combined_bytes: u16 = ((fourth_byte as u16) << 8) | (third_byte as u16);
+
+                i += 2; // adding two to not go off course in the loop. Because we went forward 2x with the third and fourth_byte index.
+
+                Some(combined_bytes as usize)
+            }
+            Operation::IMMEDIATE_TO_REGISTER_16 => {
+                let third_byte = binary_contents[i + 2];
+                let combined_bytes: u16 = ((third_byte as u16) << 8) | (second_byte as u16);
+
+                i += 1; // adding one to not go off course in the loop. Because we went forward with the third_byte index.
+
+                Some(combined_bytes as usize)
+            }
+            Operation::IMMEDIATE_TO_REGISTER_8 => Some(second_byte as usize),
+            Operation::REGISTER_MODE | Operation::MEMORY_MODE_NONE => None,
+        };
+
+        // Handling the case where for example there is a displacement like mov [bp + 0], ch which is an useless displacement.
+        if disp == Some(0) {
+            disp = None;
+        }
+
+        // When dealing immediate to register instructions, reg is always on the lefthand side so we don't have to check for it.
+        // We are also unwrapping disp because we have covered the cases on the previous branch and are sure that it contains a value.
+        if op == Operation::IMMEDIATE_TO_REGISTER_8 || op == Operation::IMMEDIATE_TO_REGISTER_16 {
+            println!(
+                "mov {}, {}",
+                reg_register,
+                disp.expect(
+                    "unwrapped disp because we thought we were sure it had a value inside."
+                )
+            );
+        } else {
+            match (reg_is_dest, disp) {
+                (true, Some(disp)) => {
+                    if op == Operation::MEMORY_MODE_DIRECT {
+                        println!("mov {}, [{}]", reg_register, disp);
+                    } else {
+                        println!("mov {}, [{} + {}]", reg_register, rm_register, disp);
+                    }
+                }
+                (false, Some(disp)) => {
+                    println!("mov [{} + {}], {}", rm_register, disp, reg_register);
+                }
+                (true, None) => {
+                    if op == Operation::REGISTER_MODE {
+                        println!("mov {}, {}", reg_register, rm_register);
+                    } else {
+                        println!("mov {}, [{}]", reg_register, rm_register);
+                    }
+                }
+                (false, None) => {
+                    if op == Operation::REGISTER_MODE {
+                        println!("mov {}, {}", rm_register, reg_register);
+                    } else {
+                        println!("mov [{}], {}", rm_register, reg_register);
+                    }
+                }
+            }
+        }
+        i += 2; // each iteration is 1 byte, a instruction is minimum 2 bytes.
     }
 }
-
-// ALL THE POSSIBLE INSTRUCTIONS
-
-////////////////////////////////
-// 0b_100010_00_11_000_000
-// 0b_100010_00_11_000_001
-// 0b_100010_00_11_000_010
-// 0b_100010_00_11_000_011
-// 0b_100010_00_11_000_100
-// 0b_100010_00_11_000_101
-// 0b_100010_00_11_000_110
-// 0b_100010_00_11_000_111
-
-// 0b_100010_00_11_001_000
-// 0b_100010_00_11_001_001
-// 0b_100010_00_11_001_010
-// 0b_100010_00_11_001_011
-// 0b_100010_00_11_001_100
-// 0b_100010_00_11_001_101
-// 0b_100010_00_11_001_110
-// 0b_100010_00_11_001_111
-
-// 0b_100010_00_11_010_010
-// 0b_100010_00_11_010_011
-// 0b_100010_00_11_010_010
-// 0b_100010_00_11_010_011
-// 0b_100010_00_11_010_100
-// 0b_100010_00_11_010_101
-// 0b_100010_00_11_010_110
-// 0b_100010_00_11_010_111
-
-// 0b_100010_00_11_011_000
-// 0b_100010_00_11_011_001
-// 0b_100010_00_11_011_010
-// 0b_100010_00_11_011_011
-// 0b_100010_00_11_011_100
-// 0b_100010_00_11_011_101
-// 0b_100010_00_11_011_110
-// 0b_100010_00_11_011_111
-
-// 0b_100010_00_11_100_000
-// 0b_100010_00_11_100_001
-// 0b_100010_00_11_100_010
-// 0b_100010_00_11_100_011
-// 0b_100010_00_11_100_100
-// 0b_100010_00_11_100_101
-// 0b_100010_00_11_100_110
-// 0b_100010_00_11_100_111
-
-// 0b_100010_00_11_101_000
-// 0b_100010_00_11_101_001
-// 0b_100010_00_11_101_010
-// 0b_100010_00_11_101_011
-// 0b_100010_00_11_101_100
-// 0b_100010_00_11_101_101
-// 0b_100010_00_11_101_110
-// 0b_100010_00_11_101_111
-
-// 0b_100010_00_11_110_000
-// 0b_100010_00_11_110_001
-// 0b_100010_00_11_110_010
-// 0b_100010_00_11_110_011
-// 0b_100010_00_11_110_100
-// 0b_100010_00_11_110_101
-// 0b_100010_00_11_110_110
-// 0b_100010_00_11_110_111
-
-// 0b_100010_00_11_111_000
-// 0b_100010_00_11_111_001
-// 0b_100010_00_11_111_010
-// 0b_100010_00_11_111_011
-// 0b_100010_00_11_111_100
-// 0b_100010_00_11_111_101
-// 0b_100010_00_11_111_110
-// 0b_100010_00_11_111_111
-
-////////////////////////////////
-
-// 0b_100010_11_11_000_000
-// 0b_100010_11_11_000_001
-// 0b_100010_11_11_000_010
-// 0b_100010_11_11_000_011
-// 0b_100010_11_11_000_100
-// 0b_100010_11_11_000_101
-// 0b_100010_11_11_000_110
-// 0b_100010_11_11_000_111
-
-// 0b_100010_11_11_001_000
-// 0b_100010_11_11_001_001
-// 0b_100010_11_11_001_010
-// 0b_100010_11_11_001_011
-// 0b_100010_11_11_001_100
-// 0b_100010_11_11_001_101
-// 0b_100010_11_11_001_110
-// 0b_100010_11_11_001_111
-
-// 0b_100010_11_11_010_000
-// 0b_100010_11_11_010_001
-// 0b_100010_11_11_010_010
-// 0b_100010_11_11_010_011
-// 0b_100010_11_11_010_100
-// 0b_100010_11_11_010_101
-// 0b_100010_11_11_010_110
-// 0b_100010_11_11_010_111
-
-// 0b_100010_11_11_011_000
-// 0b_100010_11_11_011_001
-// 0b_100010_11_11_011_010
-// 0b_100010_11_11_011_011
-// 0b_100010_11_11_011_100
-// 0b_100010_11_11_011_101
-// 0b_100010_11_11_011_110
-// 0b_100010_11_11_011_111
-
-// 0b_100010_11_11_100_000
-// 0b_100010_11_11_100_001
-// 0b_100010_11_11_100_010
-// 0b_100010_11_11_100_011
-// 0b_100010_11_11_100_100
-// 0b_100010_11_11_100_101
-// 0b_100010_11_11_100_110
-// 0b_100010_11_11_100_111
-
-// 0b_100010_11_11_101_000
-// 0b_100010_11_11_101_001
-// 0b_100010_11_11_101_010
-// 0b_100010_11_11_101_011
-// 0b_100010_11_11_101_100
-// 0b_100010_11_11_101_101
-// 0b_100010_11_11_101_110
-// 0b_100010_11_11_101_111
-
-// 0b_100010_11_11_110_000
-// 0b_100010_11_11_110_001
-// 0b_100010_11_11_110_010
-// 0b_100010_11_11_110_011
-// 0b_100010_11_11_110_100
-// 0b_100010_11_11_110_101
-// 0b_100010_11_11_110_110
-// 0b_100010_11_11_110_111
-
-// 0b_100010_11_11_111_000
-// 0b_100010_11_11_111_001
-// 0b_100010_11_11_111_010
-// 0b_100010_11_11_111_011
-// 0b_100010_11_11_111_100
-// 0b_100010_11_11_111_101
-// 0b_100010_11_11_111_110
-// 0b_100010_11_11_111_111
-
-// 0b_100010_11_11_000_000
-// 0b_100010_11_11_000_001
-// 0b_100010_11_11_000_010
-// 0b_100010_11_11_000_011
-// 0b_100010_11_11_000_100
-// 0b_100010_11_11_000_101
-// 0b_100010_11_11_000_110
-// 0b_100010_11_11_000_111
-
-// 0b_100010_11_11_001_000
-// 0b_100010_11_11_001_001
-// 0b_100010_11_11_001_010
-// 0b_100010_11_11_001_011
-// 0b_100010_11_11_001_100
-// 0b_100010_11_11_001_101
-// 0b_100010_11_11_001_110
-// 0b_100010_11_11_001_111
-
-// 0b_100010_11_11_010_000
-// 0b_100010_11_11_010_001
-// 0b_100010_11_11_010_010
-// 0b_100010_11_11_010_011
-// 0b_100010_11_11_010_100
-// 0b_100010_11_11_010_101
-// 0b_100010_11_11_010_110
-// 0b_100010_11_11_010_111
-
-////////////////////////////////
-// 0b_100010_01_11_010_000
-// 0b_100010_01_11_010_001
-// 0b_100010_01_11_010_010
-// 0b_100010_01_11_010_011
-// 0b_100010_01_11_010_100
-// 0b_100010_01_11_010_101
-// 0b_100010_01_11_010_110
-// 0b_100010_01_11_010_111
-
-// 0b_100010_01_11_011_000
-// 0b_100010_01_11_011_001
-// 0b_100010_01_11_011_010
-// 0b_100010_01_11_011_011
-// 0b_100010_01_11_011_100
-// 0b_100010_01_11_011_101
-// 0b_100010_01_11_011_110
-// 0b_100010_01_11_011_111
-
-// 0b_100010_01_11_100_000
-// 0b_100010_01_11_100_001
-// 0b_100010_01_11_100_010
-// 0b_100010_01_11_100_011
-// 0b_100010_01_11_100_100
-// 0b_100010_01_11_100_101
-// 0b_100010_01_11_100_110
-// 0b_100010_01_11_100_111
-
-// 0b_100010_01_11_101_000
-// 0b_100010_01_11_101_001
-// 0b_100010_01_11_101_010
-// 0b_100010_01_11_101_011
-// 0b_100010_01_11_101_100
-// 0b_100010_01_11_101_101
-// 0b_100010_01_11_101_110
-// 0b_100010_01_11_101_111
-
-// 0b_100010_01_11_110_000
-// 0b_100010_01_11_110_001
-// 0b_100010_01_11_110_010
-// 0b_100010_01_11_110_011
-// 0b_100010_01_11_110_100
-// 0b_100010_01_11_110_101
-// 0b_100010_01_11_110_110
-// 0b_100010_01_11_110_111
-
-// 0b_100010_01_11_111_000
-// 0b_100010_01_11_111_001
-// 0b_100010_01_11_111_010
-// 0b_100010_01_11_111_011
-// 0b_100010_01_11_111_100
-// 0b_100010_01_11_111_101
-// 0b_100010_01_11_111_110
-// 0b_100010_01_11_111_111
-
-////////////////////////////////
-// 0b_100010_10_11_010_000
-// 0b_100010_10_11_010_001
-// 0b_100010_10_11_010_010
-// 0b_100010_10_11_010_011
-// 0b_100010_10_11_010_100
-// 0b_100010_10_11_010_101
-// 0b_100010_10_11_010_110
-// 0b_100010_10_11_010_111
-
-// 0b_100010_10_11_011_000
-// 0b_100010_10_11_011_001
-// 0b_100010_10_11_011_010
-// 0b_100010_10_11_011_011
-// 0b_100010_10_11_011_100
-// 0b_100010_10_11_011_101
-// 0b_100010_10_11_011_110
-// 0b_100010_10_11_011_111
-
-// 0b_100010_10_11_100_000
-// 0b_100010_10_11_100_001
-// 0b_100010_10_11_100_010
-// 0b_100010_10_11_100_011
-// 0b_100010_10_11_100_100
-// 0b_100010_10_11_100_101
-// 0b_100010_10_11_100_110
-// 0b_100010_10_11_100_111
-
-// 0b_100010_10_11_101_000
-// 0b_100010_10_11_101_001
-// 0b_100010_10_11_101_010
-// 0b_100010_10_11_101_011
-// 0b_100010_10_11_101_100
-// 0b_100010_10_11_101_101
-// 0b_100010_10_11_101_110
-// 0b_100010_10_11_101_111
-
-// 0b_100010_10_11_110_000
-// 0b_100010_10_11_110_001
-// 0b_100010_10_11_110_010
-// 0b_100010_10_11_110_011
-// 0b_100010_10_11_110_100
-// 0b_100010_10_11_110_101
-// 0b_100010_10_11_110_110
-// 0b_100010_10_11_110_111
-
-// 0b_100010_10_11_111_000
-// 0b_100010_10_11_111_001
-// 0b_100010_10_11_111_010
-// 0b_100010_10_11_111_011
-// 0b_100010_10_11_111_100
-// 0b_100010_10_11_111_101
-// 0b_100010_10_11_111_110
-// 0b_100010_10_11_111_111
-// D = 0 = Instruction source is specified in the REG field
-// W = 0 = Instruction operate on byte data
+//   mov   _DW_MOD_REG_R/M
+//0b_100010_10_11_010_010
