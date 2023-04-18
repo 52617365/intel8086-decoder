@@ -4,13 +4,14 @@ use std::{env, fs};
 // All the different instruction operations we're looking to handle at the moment.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Operation {
-    REGISTER_MODE,            // no displacement
-    MEMORY_MODE_8,            // 8 bit displacement
-    MEMORY_MODE_16,           // 16 bit displacement
+    REGISTER_MODE,                  // no displacement
+    MEMORY_MODE_8,                  // 8 bit displacement
+    MEMORY_MODE_16,                 // 16 bit displacement
     MEMORY_MODE_NONE, // No displacement expect if R/M is 110, then it's 16 bit direct address.
     MEMORY_MODE_DIRECT, // This is mod 00 with r/m 110 16 bit displacement into a direct memory address
     IMMEDIATE_TO_REGISTER_8, // The first byte is set to 10110... and the instruction is 2 bytes wide. (last byte is the immediate)
     IMMEDIATE_TO_REGISTER_16, // The first byte is set to 10111... and the instruction is 3 bytes wide. (last 2 bytes is the immediate)
+    CONDITIONAL_JUMP(&'static str), // The first byte is the jump instruction, second byte is the address to jump to.
 }
 
 fn get_op_code(first_byte: u8, second_byte: u8, op: Operation) -> &'static str {
@@ -145,18 +146,20 @@ fn get_rm_register(byte: u8, is_word_size: bool, op: Operation) -> &'static str 
 // In this function we have to check both the first byte and second byte because the first byte determines the contents of the second byte.
 fn get_operation(first_byte: u8, second_byte: u8) -> Operation {
     const IMMEDIATE_TO_REGISTER_MASK: u8 = 0b_11111000;
+    const CONDITIONAL_JUMP_MASK: u8 = 0b_11111111;
     const MOD_MASK: u8 = 0b_11_000_000;
 
     return match (
         first_byte & IMMEDIATE_TO_REGISTER_MASK,
         second_byte & MOD_MASK,
+        first_byte & CONDITIONAL_JUMP_MASK,
     ) {
-        (0b_1011_1000, _) => Operation::IMMEDIATE_TO_REGISTER_16, // 16 bit immediate to register because first byte is different from others and w bit is set to 1.
-        (0b_1011_0000, _) => Operation::IMMEDIATE_TO_REGISTER_8, // 8 bit immediate to register because first byte is different from others and w bit is set to 0.
-        (_, 0b_11_000_000) => Operation::REGISTER_MODE,
-        (_, 0b_01_000_000) => Operation::MEMORY_MODE_8,
-        (_, 0b_10_000_000) => Operation::MEMORY_MODE_16,
-        (_, 0b_00_000_000) => {
+        (0b_1011_1000, _, _) => Operation::IMMEDIATE_TO_REGISTER_16, // 16 bit immediate to register because first byte is different from others and w bit is set to 1.
+        (0b_1011_0000, _, _) => Operation::IMMEDIATE_TO_REGISTER_8, // 8 bit immediate to register because first byte is different from others and w bit is set to 0.
+        (_, 0b_11_000_000, _) => Operation::REGISTER_MODE,
+        (_, 0b_01_000_000, _) => Operation::MEMORY_MODE_8,
+        (_, 0b_10_000_000, _) => Operation::MEMORY_MODE_16,
+        (_, 0b_00_000_000, _) => {
             const RM_MASK: u8 = 0b_00_000_111; // we are masking the R/M bits here because (MOD = 00 + R/M 110) = 16 bit displacement.
             let res = second_byte & RM_MASK;
             if res == 0b_00_000_110 {
@@ -165,6 +168,21 @@ fn get_operation(first_byte: u8, second_byte: u8) -> Operation {
                 Operation::MEMORY_MODE_NONE
             }
         }
+        (_, _, 0b_011_101_00) => Operation::CONDITIONAL_JUMP("je"),
+        (_, _, 0b_011_111_00) => Operation::CONDITIONAL_JUMP("jl"),
+        (_, _, 0b_011_111_10) => Operation::CONDITIONAL_JUMP("jle"),
+        (_, _, 0b_011_100_10) => Operation::CONDITIONAL_JUMP("jb"),
+        (_, _, 0b_011_101_10) => Operation::CONDITIONAL_JUMP("jbe"),
+        (_, _, 0b_011_110_10) => Operation::CONDITIONAL_JUMP("jp"),
+        (_, _, 0b_011_100_00) => Operation::CONDITIONAL_JUMP("jo"),
+        (_, _, 0b_011_110_00) => Operation::CONDITIONAL_JUMP("js"),
+        (_, _, 0b_011_101_01) => Operation::CONDITIONAL_JUMP("jne"),
+        (_, _, 0b_011_111_01) => Operation::CONDITIONAL_JUMP("jnl"),
+        (_, _, 0b_011_111_11) => Operation::CONDITIONAL_JUMP("jnle"),
+        (_, _, 0b_011_100_11) => Operation::CONDITIONAL_JUMP("jnb"),
+        (_, _, 0b_011_101_11) => Operation::CONDITIONAL_JUMP("jnbe"),
+        (_, _, 0b_011_110_11) => Operation::CONDITIONAL_JUMP("jnp"),
+        (_, _, 0b_011_100_01) => Operation::CONDITIONAL_JUMP("jno"),
         _ => panic!("Unknown operation - get_operation line: {}", line!()),
     };
 }
@@ -224,7 +242,9 @@ fn main() {
 
                 Some(combined_bytes as usize)
             }
-            Operation::IMMEDIATE_TO_REGISTER_8 => Some(second_byte as usize),
+            Operation::IMMEDIATE_TO_REGISTER_8 | Operation::CONDITIONAL_JUMP(_) => {
+                Some(second_byte as usize)
+            }
             Operation::REGISTER_MODE | Operation::MEMORY_MODE_NONE => None,
         };
 
@@ -237,12 +257,24 @@ fn main() {
         // We are also unwrapping disp because we have covered the cases on the previous branch and are sure that it contains a value.
         if op == Operation::IMMEDIATE_TO_REGISTER_8 || op == Operation::IMMEDIATE_TO_REGISTER_16 {
             println!(
-                "mov {}, {}",
+                "{} {}, {}",
+                op_code,
                 reg_register,
                 disp.expect(
                     "unwrapped disp because we thought we were sure it had a value inside."
                 )
             );
+        } else if let Operation::CONDITIONAL_JUMP(_) = op {
+            if let Operation::CONDITIONAL_JUMP(content) = op {
+                println!(
+                    "{} {}, {}",
+                    op_code,
+                    content,
+                    disp.expect(
+                        "unwrapped disp because we thought we were sure it had a value inside."
+                    )
+                );
+            }
         } else {
             match (reg_is_dest, disp) {
                 (true, Some(disp)) => {
