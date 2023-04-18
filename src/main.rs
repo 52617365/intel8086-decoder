@@ -13,6 +13,30 @@ enum Operation {
     IMMEDIATE_TO_REGISTER_16, // The first byte is set to 10111... and the instruction is 3 bytes wide. (last 2 bytes is the immediate)
 }
 
+fn get_op_code(first_byte: u8, second_byte: u8, op: Operation) -> &'static str {
+    const OP_CODE_MASK: u8 = 0b_111111_00; // used to determine if mov, add, cmp etc.
+    if op == Operation::IMMEDIATE_TO_REGISTER_16 || op == Operation::IMMEDIATE_TO_REGISTER_8 {
+        const MOD_MASK: u8 = 0b_000111_00; // used to determine if mov, add, cmp etc with immediates.
+
+        match (first_byte & OP_CODE_MASK, second_byte & MOD_MASK) {
+            (0b_1100_01_00, 0b_000_000_00) => "mov",
+            (0b_1000_00_00, 0b_000_000_00) => "add",
+            (0b_1000_00_00, 0b_000_101_00) => "sub",
+            (0b_1000_00_00, 0b_000_111_00) => "cmp",
+            _ => panic!("Unknown operation"),
+        }
+    } else {
+        const OP_CODE_MASK: u8 = 0b_111111_00; // used to determine if mov, add, cmp etc.
+
+        match first_byte & OP_CODE_MASK {
+            0b_100010_00 => "mov",
+            0b_000000_00 => "add",
+            0b_001010_00 => "sub",
+            0b_001110_00 => "cmp",
+            _ => panic!("Unknown operation"),
+        }
+    }
+}
 fn get_reg_register(
     first_byte: u8,
     second_byte: u8,
@@ -175,6 +199,7 @@ fn main() {
 
         let reg_register = get_reg_register(first_byte, second_byte, is_word_size, op);
         let rm_register = get_rm_register(second_byte, is_word_size, op);
+        let op_code = get_op_code(first_byte, second_byte, op);
 
         let mut disp: Option<usize> = match op {
             Operation::MEMORY_MODE_8 => {
@@ -222,26 +247,26 @@ fn main() {
             match (reg_is_dest, disp) {
                 (true, Some(disp)) => {
                     if op == Operation::MEMORY_MODE_DIRECT {
-                        println!("mov {}, [{}]", reg_register, disp);
+                        println!("{} {}, [{}]", op_code, reg_register, disp);
                     } else {
-                        println!("mov {}, [{} + {}]", reg_register, rm_register, disp);
+                        println!("{} {}, [{} + {}]", op_code, reg_register, rm_register, disp);
                     }
                 }
                 (false, Some(disp)) => {
-                    println!("mov [{} + {}], {}", rm_register, disp, reg_register);
+                    println!("{} [{} + {}], {}", op_code, rm_register, disp, reg_register);
                 }
                 (true, None) => {
                     if op == Operation::REGISTER_MODE {
-                        println!("mov {}, {}", reg_register, rm_register);
+                        println!("{} {}, {}", op_code, reg_register, rm_register);
                     } else {
-                        println!("mov {}, [{}]", reg_register, rm_register);
+                        println!("{} {}, [{}]", op_code, reg_register, rm_register);
                     }
                 }
                 (false, None) => {
                     if op == Operation::REGISTER_MODE {
-                        println!("mov {}, {}", rm_register, reg_register);
+                        println!("{} {}, {}", op_code, rm_register, reg_register);
                     } else {
-                        println!("mov [{}], {}", rm_register, reg_register);
+                        println!("{} [{}], {}", op_code, rm_register, reg_register);
                     }
                 }
             }
@@ -251,3 +276,14 @@ fn main() {
 }
 //   mov   _DW_MOD_REG_R/M
 //0b_100010_10_11_010_010
+
+// MOV 100010
+// ADD 000000
+// SUB 001010
+// CMP 001110
+//
+// IMMEDIATES MOD (check both bytes each time in case)
+// MOV 000
+// ADD 000
+// SUB 101
+// CMP 111
