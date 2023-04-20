@@ -1,6 +1,10 @@
 use core::panic;
 use std::{env, fs};
 
+// Ideas:
+// Should for example the registers be coupled with the Operation enum? E.g. the reg and r/m registers would be wrapped into the enum itself, this would
+// allow stuff to not be so independent from eachother.
+
 // All the different instruction operations we're looking to handle at the moment.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Operation {
@@ -136,9 +140,8 @@ fn get_rm_register(byte: u8, is_word_size: bool, op: Operation) -> &'static str 
                     "" // direct address instead of a register.
                 }
             }
-
             0b00_000_111 => "bx",
-            _ => panic!("unknwon instruction detected"),
+            _ => panic!("unknown instruction detected"),
         }
     }
 }
@@ -146,20 +149,18 @@ fn get_rm_register(byte: u8, is_word_size: bool, op: Operation) -> &'static str 
 // In this function we have to check both the first byte and second byte because the first byte determines the contents of the second byte.
 fn get_operation(first_byte: u8, second_byte: u8) -> Operation {
     const IMMEDIATE_TO_REGISTER_MASK: u8 = 0b_11111000;
-    const CONDITIONAL_JUMP_MASK: u8 = 0b_11111111;
     const MOD_MASK: u8 = 0b_11_000_000;
 
     return match (
         first_byte & IMMEDIATE_TO_REGISTER_MASK,
         second_byte & MOD_MASK,
-        first_byte & CONDITIONAL_JUMP_MASK,
     ) {
-        (0b_1011_1000, _, _) => Operation::IMMEDIATE_TO_REGISTER_16, // 16 bit immediate to register because first byte is different from others and w bit is set to 1.
-        (0b_1011_0000, _, _) => Operation::IMMEDIATE_TO_REGISTER_8, // 8 bit immediate to register because first byte is different from others and w bit is set to 0.
-        (_, 0b_11_000_000, _) => Operation::REGISTER_MODE,
-        (_, 0b_01_000_000, _) => Operation::MEMORY_MODE_8,
-        (_, 0b_10_000_000, _) => Operation::MEMORY_MODE_16,
-        (_, 0b_00_000_000, _) => {
+        (0b_1011_1000, _) => Operation::IMMEDIATE_TO_REGISTER_16, // 16 bit immediate to register because first byte is different from others and w bit is set to 1.
+        (0b_1011_0000, _) => Operation::IMMEDIATE_TO_REGISTER_8, // 8 bit immediate to register because first byte is different from others and w bit is set to 0.
+        (_, 0b_11_000_000) => Operation::REGISTER_MODE,
+        (_, 0b_01_000_000) => Operation::MEMORY_MODE_8,
+        (_, 0b_10_000_000) => Operation::MEMORY_MODE_16,
+        (_, 0b_00_000_000) => {
             const RM_MASK: u8 = 0b_00_000_111; // we are masking the R/M bits here because (MOD = 00 + R/M 110) = 16 bit displacement.
             let res = second_byte & RM_MASK;
             if res == 0b_00_000_110 {
@@ -168,21 +169,6 @@ fn get_operation(first_byte: u8, second_byte: u8) -> Operation {
                 Operation::MEMORY_MODE_NONE
             }
         }
-        (_, _, 0b_011_101_00) => Operation::CONDITIONAL_JUMP("je"),
-        (_, _, 0b_011_111_00) => Operation::CONDITIONAL_JUMP("jl"),
-        (_, _, 0b_011_111_10) => Operation::CONDITIONAL_JUMP("jle"),
-        (_, _, 0b_011_100_10) => Operation::CONDITIONAL_JUMP("jb"),
-        (_, _, 0b_011_101_10) => Operation::CONDITIONAL_JUMP("jbe"),
-        (_, _, 0b_011_110_10) => Operation::CONDITIONAL_JUMP("jp"),
-        (_, _, 0b_011_100_00) => Operation::CONDITIONAL_JUMP("jo"),
-        (_, _, 0b_011_110_00) => Operation::CONDITIONAL_JUMP("js"),
-        (_, _, 0b_011_101_01) => Operation::CONDITIONAL_JUMP("jne"),
-        (_, _, 0b_011_111_01) => Operation::CONDITIONAL_JUMP("jnl"),
-        (_, _, 0b_011_111_11) => Operation::CONDITIONAL_JUMP("jnle"),
-        (_, _, 0b_011_100_11) => Operation::CONDITIONAL_JUMP("jnb"),
-        (_, _, 0b_011_101_11) => Operation::CONDITIONAL_JUMP("jnbe"),
-        (_, _, 0b_011_110_11) => Operation::CONDITIONAL_JUMP("jnp"),
-        (_, _, 0b_011_100_01) => Operation::CONDITIONAL_JUMP("jno"),
         _ => panic!("Unknown operation - get_operation line: {}", line!()),
     };
 }
@@ -304,6 +290,87 @@ fn main() {
             }
         }
         i += 2; // each iteration is 1 byte, a instruction is minimum 2 bytes.
+    }
+}
+
+mod tests {
+    use crate::{get_operation, is_word_size, reg_is_dest, Operation};
+
+    #[test]
+    fn test_reg_is_dest() {
+        let true_byte: u8 = 0b000000_10;
+        let false_byte: u8 = 0b000000_00;
+        assert_eq!(reg_is_dest(true_byte), true);
+        assert_eq!(reg_is_dest(false_byte), false);
+    }
+
+    #[test]
+    fn test_is_word_size() {
+        let immediate_mov_byte_16: u8 = 0b_10111000;
+        let op = Operation::IMMEDIATE_TO_REGISTER_16;
+        assert_eq!(is_word_size(immediate_mov_byte_16, op), true);
+
+        let immediate_mov_byte_8: u8 = 0b_10110000;
+        let op = Operation::IMMEDIATE_TO_REGISTER_8;
+        assert_eq!(is_word_size(immediate_mov_byte_8, op), false);
+
+        let immediate_mov_byte_8: u8 = 0b_00000000;
+        let op = Operation::MEMORY_MODE_16;
+
+        assert_eq!(is_word_size(immediate_mov_byte_8, op), false);
+    }
+
+    struct get_operation_params {
+        first_byte: u8,
+        second_byte: u8,
+        expected_op: Operation,
+    }
+
+    #[test]
+    fn test_get_operation() {
+        let params: [get_operation_params; 7] = [
+            get_operation_params {
+                first_byte: 0b_1011_1000,
+                second_byte: 0b_0000_0000,
+                expected_op: Operation::IMMEDIATE_TO_REGISTER_16,
+            },
+            get_operation_params {
+                first_byte: 0b_1011_0000,
+                second_byte: 0b_0000_0000,
+                expected_op: Operation::IMMEDIATE_TO_REGISTER_8,
+            },
+            get_operation_params {
+                first_byte: 0b_0000_00_00,
+                second_byte: 0b_11_001_010,
+                expected_op: Operation::REGISTER_MODE,
+            },
+            get_operation_params {
+                first_byte: 0b_0000_00_00,
+                second_byte: 0b_01_000_000,
+                expected_op: Operation::MEMORY_MODE_8,
+            },
+            get_operation_params {
+                first_byte: 0b_0000_00_00,
+                second_byte: 0b_10_000_000,
+                expected_op: Operation::MEMORY_MODE_16,
+            },
+            get_operation_params {
+                first_byte: 0b_0000_00_00,
+                second_byte: 0b_00_000_000,
+                expected_op: Operation::MEMORY_MODE_NONE,
+            },
+            get_operation_params {
+                first_byte: 0b_0000_00_00,
+                second_byte: 0b_00_000_110,
+                expected_op: Operation::MEMORY_MODE_DIRECT,
+            },
+        ];
+        for param in params {
+            assert_eq!(
+                get_operation(param.first_byte, param.second_byte),
+                param.expected_op
+            );
+        }
     }
 }
 //   mov   _DW_MOD_REG_R/M
