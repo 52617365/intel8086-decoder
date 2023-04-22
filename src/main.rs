@@ -8,40 +8,104 @@ use std::{env, fs};
 // All the different instruction operations we're looking to handle at the moment.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Operation {
-    REGISTER_MODE,                  // no displacement
-    MEMORY_MODE_8,                  // 8 bit displacement
-    MEMORY_MODE_16,                 // 16 bit displacement
-    MEMORY_MODE_NONE, // No displacement expect if R/M is 110, then it's 16 bit direct address.
-    MEMORY_MODE_DIRECT, // This is mod 00 with r/m 110 16 bit displacement into a direct memory address
+    REGISTER_MODE,            // no displacement
     IMMEDIATE_TO_REGISTER_8, // The first byte is set to 10110... and the instruction is 2 bytes wide. (last byte is the immediate)
     IMMEDIATE_TO_REGISTER_16, // The first byte is set to 10111... and the instruction is 3 bytes wide. (last 2 bytes is the immediate)
-    CONDITIONAL_JUMP(&'static str), // The first byte is the jump instruction, second byte is the address to jump to.
+    //
+    MEMORY_MODE_8,      // 8 bit displacement
+    MEMORY_MODE_16,     // 16 bit displacement
+    MEMORY_MODE_NONE,   // No displacement expect if R/M is 110, then it's 16 bit direct address.
+    MEMORY_MODE_DIRECT, // This is mod 00 with r/m 110 16 bit displacement into a direct memory address
 }
 
-fn get_op_code(first_byte: u8, second_byte: u8, op: Operation) -> &'static str {
-    const OP_CODE_MASK: u8 = 0b_111111_00; // used to determine if mov, add, cmp etc.
-    if op == Operation::IMMEDIATE_TO_REGISTER_16 || op == Operation::IMMEDIATE_TO_REGISTER_8 {
-        const MOD_MASK: u8 = 0b_000111_00; // used to determine if mov, add, cmp etc with immediates.
+fn get_register(
+    first_byte: u8,
+    second_byte: u8,
+    get_reg: bool,
+    is_word_size: bool,
+    op: Operation,
+) -> &'static str {
+    match (get_reg, op) {
+        (true, Operation::IMMEDIATE_TO_REGISTER_16)
+        | (true, Operation::IMMEDIATE_TO_REGISTER_8)
+        | (false, Operation::REGISTER_MODE) => {
+            const IMMEDIATE_REG_MASK: u8 = 0b_00_000_111;
 
-        match (first_byte & OP_CODE_MASK, second_byte & MOD_MASK) {
-            (0b_1100_01_00, 0b_000_000_00) => "mov",
-            (0b_1000_00_00, 0b_000_000_00) => "add",
-            (0b_1000_00_00, 0b_000_101_00) => "sub",
-            (0b_1000_00_00, 0b_000_111_00) => "cmp",
-            _ => panic!("Unknown operation"),
-        }
-    } else {
-        const OP_CODE_MASK: u8 = 0b_111111_00; // used to determine if mov, add, cmp etc.
+            let mask_result = first_byte & IMMEDIATE_REG_MASK;
 
-        match first_byte & OP_CODE_MASK {
-            0b_100010_00 => "mov",
-            0b_000000_00 => "add",
-            0b_001010_00 => "sub",
-            0b_001110_00 => "cmp",
-            _ => panic!("Unknown operation"),
+            return match (is_word_size, mask_result) {
+                (true, 0b_00_000_000) => "ax",
+                (true, 0b_00_000_001) => "cx",
+                (true, 0b_00_000_010) => "dx",
+                (true, 0b_00_000_011) => "bx",
+                (true, 0b_00_000_100) => "sp",
+                (true, 0b_00_000_101) => "bp",
+                (true, 0b_00_000_110) => "si",
+                (true, 0b_00_000_111) => "di",
+                //
+                (false, 0b_00_000_000) => "al",
+                (false, 0b_00_000_001) => "cl",
+                (false, 0b_00_000_010) => "dl",
+                (false, 0b_00_000_011) => "bl",
+                (false, 0b_00_000_100) => "ah",
+                (false, 0b_00_000_101) => "ch",
+                (false, 0b_00_000_110) => "dh",
+                (false, 0b_00_000_111) => "bh",
+                _ => panic!("Unknown register"),
+            };
         }
+        // REG REGISTERS
+        (true, _) => {
+            // basically an else statement for reg registers.
+            const REGISTER_MEMORY_REG_MASK: u8 = 0b00_111_000; // this is only used for register to register / memory to register and vica verca operations.
+            let result = second_byte & REGISTER_MEMORY_REG_MASK;
+            return match (is_word_size, result) {
+                (true, 0b00_000_000) => "ax",
+                (true, 0b00_001_000) => "cx",
+                (true, 0b00_010_000) => "dx",
+                (true, 0b00_011_000) => "bx",
+                (true, 0b00_100_000) => "sp",
+                (true, 0b00_101_000) => "bp",
+                (true, 0b00_110_000) => "si",
+                (true, 0b00_111_000) => "di",
+                //
+                (false, 0b00_000_000) => "al",
+                (false, 0b00_001_000) => "cl",
+                (false, 0b00_010_000) => "dl",
+                (false, 0b00_011_000) => "bl",
+                (false, 0b00_100_000) => "ah",
+                (false, 0b00_101_000) => "ch",
+                (false, 0b00_110_000) => "dh",
+                (false, 0b00_111_000) => "bh",
+                _ => panic!("Unknown register"),
+            };
+        }
+
+        // R/M REGISTERS
+        (false, _) => {
+            const RM_MASK: u8 = 0b00_000_111; // this is used to get the contents of the R/M field
+            return match first_byte & RM_MASK {
+                0b00_000_000 => "bx + si",
+                0b00_000_001 => "bx + di",
+                0b00_000_010 => "bp + si",
+                0b00_000_011 => "bp + di",
+                0b00_000_100 => "si",
+                0b00_000_101 => "di",
+                0b00_000_110 => {
+                    if op == Operation::MEMORY_MODE_DIRECT {
+                        return "bp";
+                    } else {
+                        return "";
+                    }
+                }
+                0b00_000_111 => "bx",
+                _ => panic!("unknown instruction detected"),
+            };
+        }
+        _ => panic!("Unknown instruction"),
     }
 }
+
 fn get_reg_register(
     first_byte: u8,
     second_byte: u8,
@@ -176,7 +240,8 @@ fn reg_is_dest(byte: u8) -> bool {
     const DEST_REG_MASK: u8 = 0b000000_10; // This is the D bit specified after the instruction operand. It's responsible for specifying the destination and source register.
     return byte & DEST_REG_MASK != 0;
 }
-fn is_word_size(byte: u8, op: Operation) -> bool {
+
+fn is_word_size_fn(byte: u8, op: Operation) -> bool {
     if op == Operation::IMMEDIATE_TO_REGISTER_16 || op == Operation::IMMEDIATE_TO_REGISTER_8 {
         const IMMEDIATE_TO_REGISTER_W_MASK: u8 = 0b0000_1_000; // This is the W bit of a memory to register, register to memory and register to register move and it's responsible for determining the size of the registers (8 or 16 bit).
         return byte & IMMEDIATE_TO_REGISTER_W_MASK != 0;
@@ -198,12 +263,10 @@ fn main() {
 
         let op = get_operation(first_byte, second_byte);
 
-        let reg_is_dest = reg_is_dest(first_byte);
-        let is_word_size = is_word_size(first_byte, op);
+        let is_word_size = is_word_size_fn(first_byte, op);
 
         let reg_register = get_reg_register(first_byte, second_byte, is_word_size, op);
         let rm_register = get_rm_register(second_byte, is_word_size, op);
-        let op_code = get_op_code(first_byte, second_byte, op);
 
         let mut disp: Option<usize> = match op {
             Operation::MEMORY_MODE_8 => {
@@ -228,9 +291,7 @@ fn main() {
 
                 Some(combined_bytes as usize)
             }
-            Operation::IMMEDIATE_TO_REGISTER_8 | Operation::CONDITIONAL_JUMP(_) => {
-                Some(second_byte as usize)
-            }
+            Operation::IMMEDIATE_TO_REGISTER_8 => Some(second_byte as usize),
             Operation::REGISTER_MODE | Operation::MEMORY_MODE_NONE => None,
         };
 
@@ -239,52 +300,42 @@ fn main() {
             disp = None;
         }
 
+        let reg_is_dest = reg_is_dest(first_byte);
         // When dealing immediate to register instructions, reg is always on the lefthand side so we don't have to check for it.
         // We are also unwrapping disp because we have covered the cases on the previous branch and are sure that it contains a value.
         if op == Operation::IMMEDIATE_TO_REGISTER_8 || op == Operation::IMMEDIATE_TO_REGISTER_16 {
             println!(
                 "{} {}, {}",
-                op_code,
+                "mov",
                 reg_register,
                 disp.expect(
                     "unwrapped disp because we thought we were sure it had a value inside."
                 )
             );
-        } else if let Operation::CONDITIONAL_JUMP(_) = op {
-            if let Operation::CONDITIONAL_JUMP(content) = op {
-                println!(
-                    "{} {}, {}",
-                    op_code,
-                    content,
-                    disp.expect(
-                        "unwrapped disp because we thought we were sure it had a value inside."
-                    )
-                );
-            }
         } else {
             match (reg_is_dest, disp) {
                 (true, Some(disp)) => {
                     if op == Operation::MEMORY_MODE_DIRECT {
-                        println!("{} {}, [{}]", op_code, reg_register, disp);
+                        println!("{} {}, [{}]", "mov", reg_register, disp);
                     } else {
-                        println!("{} {}, [{} + {}]", op_code, reg_register, rm_register, disp);
+                        println!("{} {}, [{} + {}]", "mov", reg_register, rm_register, disp);
                     }
                 }
                 (false, Some(disp)) => {
-                    println!("{} [{} + {}], {}", op_code, rm_register, disp, reg_register);
+                    println!("{} [{} + {}], {}", "mov", rm_register, disp, reg_register);
                 }
                 (true, None) => {
                     if op == Operation::REGISTER_MODE {
-                        println!("{} {}, {}", op_code, reg_register, rm_register);
+                        println!("{} {}, {}", "mov", reg_register, rm_register);
                     } else {
-                        println!("{} {}, [{}]", op_code, reg_register, rm_register);
+                        println!("{} {}, [{}]", "mov", reg_register, rm_register);
                     }
                 }
                 (false, None) => {
                     if op == Operation::REGISTER_MODE {
-                        println!("{} {}, {}", op_code, rm_register, reg_register);
+                        println!("{} {}, {}", "mov", rm_register, reg_register);
                     } else {
-                        println!("{} [{}], {}", op_code, rm_register, reg_register);
+                        println!("{} [{}], {}", "mov", rm_register, reg_register);
                     }
                 }
             }
@@ -293,8 +344,10 @@ fn main() {
     }
 }
 
+#[cfg(test)]
 mod tests {
-    use crate::{get_operation, is_word_size, reg_is_dest, Operation};
+    use super::*;
+    // use crate::{get_operation, get_register, is_word_size, reg_is_dest, Operation};
 
     #[test]
     fn test_reg_is_dest() {
@@ -308,16 +361,108 @@ mod tests {
     fn test_is_word_size() {
         let immediate_mov_byte_16: u8 = 0b_10111000;
         let op = Operation::IMMEDIATE_TO_REGISTER_16;
-        assert_eq!(is_word_size(immediate_mov_byte_16, op), true);
+        assert_eq!(is_word_size_fn(immediate_mov_byte_16, op), true);
 
         let immediate_mov_byte_8: u8 = 0b_10110000;
         let op = Operation::IMMEDIATE_TO_REGISTER_8;
-        assert_eq!(is_word_size(immediate_mov_byte_8, op), false);
+        assert_eq!(is_word_size_fn(immediate_mov_byte_8, op), false);
 
         let immediate_mov_byte_8: u8 = 0b_00000000;
         let op = Operation::MEMORY_MODE_16;
 
-        assert_eq!(is_word_size(immediate_mov_byte_8, op), false);
+        assert_eq!(is_word_size_fn(immediate_mov_byte_8, op), false);
+    }
+
+    struct get_register_params {
+        first_byte: u8,
+        second_byte: u8,
+        is_word_size: bool,
+        expected_op: Operation,
+        expected_result: &'static str,
+        get_reg: bool,
+    }
+
+    #[test]
+    fn test_get_register() {
+        let params: [get_register_params; 8] = [
+            get_register_params {
+                first_byte: 0b_11_111_000,
+                second_byte: 0b_00_000_000,
+                is_word_size: true,
+                expected_op: Operation::IMMEDIATE_TO_REGISTER_16,
+                expected_result: "ax",
+                get_reg: true,
+            },
+            get_register_params {
+                first_byte: 0b_11_111_001,
+                second_byte: 0b_00_000_000,
+                is_word_size: false,
+                expected_op: Operation::IMMEDIATE_TO_REGISTER_8,
+                expected_result: "cl",
+                get_reg: true,
+            },
+            get_register_params {
+                first_byte: 0b_11_111_001,
+                second_byte: 0b_00_000_000,
+                is_word_size: false,
+                expected_op: Operation::REGISTER_MODE,
+                expected_result: "cl",
+                get_reg: false,
+            },
+            get_register_params {
+                first_byte: 0b_11_111_000,
+                second_byte: 0b_00_000_000,
+                is_word_size: false,
+                expected_op: Operation::MEMORY_MODE_16,
+                expected_result: "bx + si",
+                get_reg: false,
+            },
+            get_register_params {
+                first_byte: 0b_11_111_110,
+                second_byte: 0b_00_000_000,
+                is_word_size: false,
+                expected_op: Operation::MEMORY_MODE_DIRECT,
+                expected_result: "bp",
+                get_reg: false,
+            },
+            get_register_params {
+                first_byte: 0b_11_111_110,
+                second_byte: 0b_00_000_000,
+                is_word_size: false,
+                expected_op: Operation::MEMORY_MODE_16,
+                expected_result: "",
+                get_reg: false,
+            },
+            get_register_params {
+                first_byte: 0b_00_000_000,
+                second_byte: 0b_00_111_000,
+                is_word_size: false,
+                expected_op: Operation::MEMORY_MODE_16,
+                expected_result: "bh",
+                get_reg: true,
+            },
+            get_register_params {
+                first_byte: 0b_00_000_000,
+                second_byte: 0b_00_111_000,
+                is_word_size: true,
+                expected_op: Operation::MEMORY_MODE_16,
+                expected_result: "di",
+                get_reg: true,
+            },
+        ];
+
+        for param in params {
+            assert_eq!(
+                get_register(
+                    param.first_byte,
+                    param.second_byte,
+                    param.get_reg,
+                    param.is_word_size,
+                    param.expected_op
+                ),
+                param.expected_result
+            );
+        }
     }
 
     struct get_operation_params {
