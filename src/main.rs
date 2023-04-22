@@ -106,110 +106,6 @@ fn get_register(
     }
 }
 
-fn get_reg_register(
-    first_byte: u8,
-    second_byte: u8,
-    is_word_size: bool,
-    op: Operation,
-) -> &'static str {
-    if op == Operation::IMMEDIATE_TO_REGISTER_16 || op == Operation::IMMEDIATE_TO_REGISTER_8 {
-        // Immediate to register reg field is in the first byte. Normally it's in the second byte.
-        // This is why we have to have separate logic for this case.
-        const IMMEDIATE_REG_MASK: u8 = 0b_00_000_111;
-
-        let mask_result = first_byte & IMMEDIATE_REG_MASK;
-
-        return match (is_word_size, mask_result) {
-            (true, 0b_00_000_000) => "ax",
-            (true, 0b_00_000_001) => "cx",
-            (true, 0b_00_000_010) => "dx",
-            (true, 0b_00_000_011) => "bx",
-            (true, 0b_00_000_100) => "sp",
-            (true, 0b_00_000_101) => "bp",
-            (true, 0b_00_000_110) => "si",
-            (true, 0b_00_000_111) => "di",
-            //
-            (false, 0b_00_000_000) => "al",
-            (false, 0b_00_000_001) => "cl",
-            (false, 0b_00_000_010) => "dl",
-            (false, 0b_00_000_011) => "bl",
-            (false, 0b_00_000_100) => "ah",
-            (false, 0b_00_000_101) => "ch",
-            (false, 0b_00_000_110) => "dh",
-            (false, 0b_00_000_111) => "bh",
-            _ => panic!("Unknown register"),
-        };
-    } else {
-        const REGISTER_MEMORY_REG_MASK: u8 = 0b00_111_000; // this is only used for register to register / memory to register and vica verca operations.
-        let result = second_byte & REGISTER_MEMORY_REG_MASK;
-        return match (is_word_size, result) {
-            (true, 0b00_000_000) => "ax",
-            (true, 0b00_001_000) => "cx",
-            (true, 0b00_010_000) => "dx",
-            (true, 0b00_011_000) => "bx",
-            (true, 0b00_100_000) => "sp",
-            (true, 0b00_101_000) => "bp",
-            (true, 0b00_110_000) => "si",
-            (true, 0b00_111_000) => "di",
-            //
-            (false, 0b00_000_000) => "al",
-            (false, 0b00_001_000) => "cl",
-            (false, 0b00_010_000) => "dl",
-            (false, 0b00_011_000) => "bl",
-            (false, 0b00_100_000) => "ah",
-            (false, 0b00_101_000) => "ch",
-            (false, 0b00_110_000) => "dh",
-            (false, 0b00_111_000) => "bh",
-            _ => panic!("Unknown register"),
-        };
-    }
-}
-
-fn get_rm_register(byte: u8, is_word_size: bool, op: Operation) -> &'static str {
-    const RM_MASK: u8 = 0b00_000_111; // this is used to get the contents of the R/M field
-    let result = byte & RM_MASK;
-    if op == Operation::REGISTER_MODE {
-        return match (is_word_size, result) {
-            (true, 0b00_000_000) => "ax",
-            (true, 0b00_000_001) => "cx",
-            (true, 0b00_000_010) => "dx",
-            (true, 0b00_000_011) => "bx",
-            (true, 0b00_000_100) => "sp",
-            (true, 0b00_000_101) => "bp",
-            (true, 0b00_000_110) => "si",
-            (true, 0b00_000_111) => "di",
-            //
-            (false, 0b00_000_000) => "al",
-            (false, 0b00_000_001) => "cl",
-            (false, 0b00_000_010) => "dl",
-            (false, 0b00_000_011) => "bl",
-            (false, 0b00_000_100) => "ah",
-            (false, 0b00_000_101) => "ch",
-            (false, 0b00_000_110) => "dh",
-            (false, 0b00_000_111) => "bh",
-            _ => panic!("Unknown register"),
-        };
-    } else {
-        match result {
-            0b00_000_000 => "bx + si",
-            0b00_000_001 => "bx + di",
-            0b00_000_010 => "bp + si",
-            0b00_000_011 => "bp + di",
-            0b00_000_100 => "si",
-            0b00_000_101 => "di",
-            0b00_000_110 => {
-                if op != Operation::MEMORY_MODE_DIRECT {
-                    "bp"
-                } else {
-                    "" // direct address instead of a register.
-                }
-            }
-            0b00_000_111 => "bx",
-            _ => panic!("unknown instruction detected"),
-        }
-    }
-}
-
 // In this function we have to check both the first byte and second byte because the first byte determines the contents of the second byte.
 fn get_operation(first_byte: u8, second_byte: u8) -> Operation {
     const IMMEDIATE_TO_REGISTER_MASK: u8 = 0b_11111000;
@@ -265,8 +161,10 @@ fn main() {
 
         let is_word_size = is_word_size_fn(first_byte, op);
 
-        let reg_register = get_reg_register(first_byte, second_byte, is_word_size, op);
-        let rm_register = get_rm_register(second_byte, is_word_size, op);
+        // let reg_register = get_reg_register(first_byte, second_byte, is_word_size, op);
+        // let rm_register = get_rm_register(second_byte, is_word_size, op);
+        let reg_register = get_register(first_byte, second_byte, true, is_word_size, op);
+        let rm_register = get_register(first_byte, second_byte, false, is_word_size, op);
 
         let mut disp: Option<usize> = match op {
             Operation::MEMORY_MODE_8 => {
