@@ -190,6 +190,12 @@ fn reg_is_dest(byte: u8) -> bool {
     return byte & FIRST_BYTE::D_BIT_MASK.bits() != 0;
 }
 
+// sig stand for significant
+fn combine_bytes(most_sig_byte: u8, least_sig_byte: u8) -> u16 {
+    let combined_bytes: u16 = ((most_sig_byte as u16) << 8) | (least_sig_byte as u16);
+    return combined_bytes;
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let binary_path = &args[1];
@@ -214,15 +220,14 @@ fn main() {
             Operation::MEMORY_MODE_16 | Operation::MEMORY_MODE_DIRECT => {
                 let third_byte = binary_contents[i + 2];
                 let fourth_byte = binary_contents[i + 3];
-                let combined_bytes: u16 = ((fourth_byte as u16) << 8) | (third_byte as u16);
-
+                let combined_bytes: u16 = combine_bytes(fourth_byte, third_byte);
                 i += 2; // adding two to not go off course in the loop. Because we went forward 2x with the third and fourth_byte index.
 
                 Some(combined_bytes as usize)
             }
             Operation::IMMEDIATE_TO_REGISTER_16 => {
                 let third_byte = binary_contents[i + 2];
-                let combined_bytes: u16 = ((third_byte as u16) << 8) | (second_byte as u16);
+                let combined_bytes: u16 = combine_bytes(third_byte, second_byte);
 
                 i += 1; // adding one to not go off course in the loop. Because we went forward with the third_byte index.
 
@@ -240,58 +245,66 @@ fn main() {
         let reg_is_dest = reg_is_dest(first_byte);
         // When dealing immediate to register instructions, reg is always on the lefthand side so we don't have to check for it.
         // We are also unwrapping disp because we have covered the cases on the previous branch and are sure that it contains a value.
-        if instruction.operation == Operation::IMMEDIATE_TO_REGISTER_8
-            || instruction.operation == Operation::IMMEDIATE_TO_REGISTER_16
-        {
-            println!(
-                "{} {}, {}",
-                instruction.mnemonic,
-                reg_register,
-                disp.expect(
-                    "unwrapped disp because we thought we were sure it had a value inside."
-                )
-            );
-        } else {
-            match (reg_is_dest, disp) {
-                (true, Some(disp)) => {
-                    if instruction.operation == Operation::MEMORY_MODE_DIRECT {
-                        println!("{} {}, [{}]", instruction.mnemonic, reg_register, disp);
-                    } else {
-                        println!(
-                            "{} {}, [{} + {}]",
-                            instruction.mnemonic, reg_register, rm_register, disp
-                        );
-                    }
-                }
-                (false, Some(disp)) => {
+        format_results(instruction, reg_register, disp, reg_is_dest, rm_register);
+        i += 2; // each iteration is 1 byte, a instruction is minimum 2 bytes.
+    }
+}
+
+fn format_results(
+    instruction: Instruction,
+    reg_register: &str,
+    disp: Option<usize>,
+    reg_is_dest: bool,
+    rm_register: &str,
+) {
+    if instruction.operation == Operation::IMMEDIATE_TO_REGISTER_8
+        || instruction.operation == Operation::IMMEDIATE_TO_REGISTER_16
+    {
+        println!(
+            "{} {}, {}",
+            instruction.mnemonic,
+            reg_register,
+            disp.expect("unwrapped disp because we thought we were sure it had a value inside.")
+        );
+    } else {
+        match (reg_is_dest, disp) {
+            (true, Some(disp)) => {
+                if instruction.operation == Operation::MEMORY_MODE_DIRECT {
+                    println!("{} {}, [{}]", instruction.mnemonic, reg_register, disp);
+                } else {
                     println!(
-                        "{} [{} + {}], {}",
-                        instruction.mnemonic, rm_register, disp, reg_register
+                        "{} {}, [{} + {}]",
+                        instruction.mnemonic, reg_register, rm_register, disp
                     );
                 }
-                (true, None) => {
-                    if instruction.operation == Operation::REGISTER_MODE {
-                        println!("{} {}, {}", instruction.mnemonic, reg_register, rm_register);
-                    } else {
-                        println!(
-                            "{} {}, [{}]",
-                            instruction.mnemonic, reg_register, rm_register
-                        );
-                    }
+            }
+            (false, Some(disp)) => {
+                println!(
+                    "{} [{} + {}], {}",
+                    instruction.mnemonic, rm_register, disp, reg_register
+                );
+            }
+            (true, None) => {
+                if instruction.operation == Operation::REGISTER_MODE {
+                    println!("{} {}, {}", instruction.mnemonic, reg_register, rm_register);
+                } else {
+                    println!(
+                        "{} {}, [{}]",
+                        instruction.mnemonic, reg_register, rm_register
+                    );
                 }
-                (false, None) => {
-                    if instruction.operation == Operation::REGISTER_MODE {
-                        println!("{} {}, {}", instruction.mnemonic, rm_register, reg_register);
-                    } else {
-                        println!(
-                            "{} [{}], {}",
-                            instruction.mnemonic, rm_register, reg_register
-                        );
-                    }
+            }
+            (false, None) => {
+                if instruction.operation == Operation::REGISTER_MODE {
+                    println!("{} {}, {}", instruction.mnemonic, rm_register, reg_register);
+                } else {
+                    println!(
+                        "{} [{}], {}",
+                        instruction.mnemonic, rm_register, reg_register
+                    );
                 }
             }
         }
-        i += 2; // each iteration is 1 byte, a instruction is minimum 2 bytes.
     }
 }
 
