@@ -6,9 +6,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/target/debug/assembler_8086",
-            "args": [
-                "C:/Users/rase/dev/assembler_8086/computer_enhance/perfaware/part1/listing_0039_more_movs"
-            ],
+            "args": [],
             "cwd": "${workspaceFolder}",
             "sourceLanguages": [
                 "rust"
@@ -23,6 +21,25 @@
                     "name": "assembler_8086"
                 }
             }
-        }
+        },
+        {
+            "name": "Debug All Rust Tests",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run"
+                ]
+            },
+            "args": [
+                "test",
+                "--nocapture"
+            ],
+            "cwd": "${workspaceFolder}",
+            "sourceLanguages": [
+                "rust"
+            ]
+        },
     ]
 }

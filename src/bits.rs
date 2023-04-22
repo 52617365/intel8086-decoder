@@ -1,6 +1,14 @@
 use bitflags::bitflags;
 bitflags! {
     #[derive(PartialEq, Eq)]
+    pub struct MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS: u8{
+       const MOV = 0b_10001000;
+       const ADD = 0b_00000000;
+       const SUB = 0b_00101000;
+       const CMP = 0b_00111000;
+    }
+
+    #[derive(PartialEq, Eq)]
     pub struct IMMEDIATE_TO_REGISTER_REG_FIELD_MASK_RESULTS: u8 {
         const BX_PLUS_SI = 0b00_000_000;
         const BX_PLUS_DI = 0b00_000_001;
@@ -25,7 +33,6 @@ bitflags! {
     pub struct IMMEDIATE_TO_REGISTER_MASK_RESULTS: u8 {
         const IMMEDIATE_TO_REGISTER_16= 0b_1011_1000;
         const IMMEDIATE_TO_REGISTER_8 = 0b_1011_0000;
-
     }
 
     #[derive(PartialEq, Eq)]
@@ -54,6 +61,9 @@ bitflags! {
     pub struct OPERATIONS: u8 {
         const IMMEDIATE_TO_REGISTER_MASK = 0b_11111000;
     }
+    // 0b_00_10_1000
+    // 0b_11_11_1000 - Mask
+    // 0b_00_10_1000
 
     pub struct FIRST_BYTE: u8 {
         const IMMEDIATE_OR_REGISTER_MODE_REG_MASK = 0b_00_000_111;
@@ -61,6 +71,7 @@ bitflags! {
         const IMMEDIATE_TO_REGISTER_W_MASK = 0b_0000_1000; // This is the W bit of a memory to register, register to memory and register to register move and it's responsible for determining the size of the registers (8 or 16 bit).
         const MEMORY_TO_REGISTER_VICA_VERCA_W_MASK = 0b000000_01; // This is the W bit of a memory to register, register to memory and register to register move and it's responsible for determining the size of the registers (8 or 16 bit).
         const IMMEDIATE_TO_REGISTER_REG_FIELD_MASK = 0b_00_000_111; // this is used to get the contents of the REG field if it's present in the first byte.
+        const MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK = 0b_11111100; // To determine what mnemonic is being used.
     }
 
     pub struct SECOND_BYTE: u8 {
