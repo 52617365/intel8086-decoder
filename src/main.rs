@@ -54,10 +54,9 @@ fn get_register(
     first_byte: u8,
     second_byte: u8,
     get_reg: bool,
-    is_word_size: bool,
-    op: Operation,
+    instruction: Instruction,
 ) -> &'static str {
-    match (get_reg, op) {
+    match (get_reg, instruction.operation) {
         (true, Operation::IMMEDIATE_TO_REGISTER_16)
         | (true, Operation::IMMEDIATE_TO_REGISTER_8)
         | (false, Operation::REGISTER_MODE) => {
@@ -65,7 +64,7 @@ fn get_register(
             let mask_cast =
                 IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::from_bits(mask_result).unwrap();
 
-            return match (is_word_size, mask_cast) {
+            return match (instruction.is_word_size, mask_cast) {
                 (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::AX_OR_AL) => "ax",
                 (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::CX_OR_CL) => "cx",
                 (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::DX_OR_DL) => "dx",
@@ -89,7 +88,7 @@ fn get_register(
         (true, _) => {
             // REG REGISTERS
             let result = second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
-            return match (is_word_size, result) {
+            return match (instruction.is_word_size, result) {
                 (true, 0b00_000_000) => "ax",
                 (true, 0b00_001_000) => "cx",
                 (true, 0b00_010_000) => "dx",
@@ -121,7 +120,7 @@ fn get_register(
                 0b00_000_100 => "si",
                 0b00_000_101 => "di",
                 0b00_000_110 => {
-                    if op == Operation::MEMORY_MODE_DIRECT {
+                    if instruction.operation == Operation::MEMORY_MODE_DIRECT {
                         return "bp";
                     } else {
                         return "";
@@ -135,9 +134,11 @@ fn get_register(
     }
 }
 
+#[derive(Clone, Copy)]
 struct Instruction {
     mnemonic: &'static str,
     operation: Operation,
+    is_word_size: bool,
 }
 // In this function we have to check both the first byte and second byte because the first byte determines the contents of the second byte.
 fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
@@ -150,6 +151,7 @@ fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
                 // 16 bit immediate to register because first byte is different from others and w bit is set to 1.
                 operation: Operation::IMMEDIATE_TO_REGISTER_16,
                 mnemonic: "mov",
+                is_word_size: first_byte & FIRST_BYTE::IMMEDIATE_TO_REGISTER_W_MASK.bits() != 0,
             }
         }
         (0b_1011_0000, _) => {
@@ -157,19 +159,23 @@ fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
                 // 8 bit immediate to register because first byte is different from others and w bit is set to 0.
                 operation: Operation::IMMEDIATE_TO_REGISTER_8,
                 mnemonic: "mov",
+                is_word_size: first_byte & FIRST_BYTE::IMMEDIATE_TO_REGISTER_W_MASK.bits() != 0,
             }
         }
         (_, 0b_11_000_000) => Instruction {
             operation: Operation::REGISTER_MODE,
             mnemonic: "mov",
+            is_word_size: first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_BIT.bits() != 0,
         },
         (_, 0b_01_000_000) => Instruction {
             operation: Operation::MEMORY_MODE_8,
             mnemonic: "mov",
+            is_word_size: first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_BIT.bits() != 0,
         },
         (_, 0b_10_000_000) => Instruction {
             operation: Operation::MEMORY_MODE_16,
             mnemonic: "mov",
+            is_word_size: first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_BIT.bits() != 0,
         },
         (_, 0b_00_000_000) => {
             // we are masking the R/M bits here because (MOD = 00 + R/M 110) = 16 bit displacement.
@@ -178,11 +184,17 @@ fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
                 Instruction {
                     operation: Operation::MEMORY_MODE_DIRECT,
                     mnemonic: "mov",
+                    is_word_size: first_byte
+                        & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_BIT.bits()
+                        != 0,
                 }
             } else {
                 Instruction {
                     operation: Operation::MEMORY_MODE_NONE,
                     mnemonic: "mov",
+                    is_word_size: first_byte
+                        & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_BIT.bits()
+                        != 0,
                 }
             }
         }
@@ -192,14 +204,6 @@ fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
 
 fn reg_is_dest(byte: u8) -> bool {
     return byte & FIRST_BYTE::DEST_REG_MASK.bits() != 0;
-}
-
-fn is_word_size_fn(byte: u8, op: Operation) -> bool {
-    if op == Operation::IMMEDIATE_TO_REGISTER_16 || op == Operation::IMMEDIATE_TO_REGISTER_8 {
-        return byte & FIRST_BYTE::IMMEDIATE_TO_REGISTER_W_MASK.bits() != 0;
-    } else {
-        return byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_BIT.bits() != 0;
-    }
 }
 
 fn main() {
@@ -214,22 +218,8 @@ fn main() {
 
         let instruction = get_instruction(first_byte, second_byte);
 
-        let is_word_size = is_word_size_fn(first_byte, instruction.operation);
-
-        let reg_register = get_register(
-            first_byte,
-            second_byte,
-            true,
-            is_word_size,
-            instruction.operation,
-        );
-        let rm_register = get_register(
-            first_byte,
-            second_byte,
-            false,
-            is_word_size,
-            instruction.operation,
-        );
+        let reg_register = get_register(first_byte, second_byte, true, instruction);
+        let rm_register = get_register(first_byte, second_byte, false, instruction);
 
         let mut disp: Option<usize> = match instruction.operation {
             Operation::MEMORY_MODE_8 => {
@@ -271,7 +261,7 @@ fn main() {
         {
             println!(
                 "{} {}, {}",
-                "mov",
+                instruction.mnemonic,
                 reg_register,
                 disp.expect(
                     "unwrapped disp because we thought we were sure it had a value inside."
@@ -334,27 +324,10 @@ mod tests {
         assert_eq!(reg_is_dest(false_byte), false);
     }
 
-    #[test]
-    fn test_is_word_size() {
-        let immediate_mov_byte_16: u8 = 0b_10111000;
-        let op = Operation::IMMEDIATE_TO_REGISTER_16;
-        assert_eq!(is_word_size_fn(immediate_mov_byte_16, op), true);
-
-        let immediate_mov_byte_8: u8 = 0b_10110000;
-        let op = Operation::IMMEDIATE_TO_REGISTER_8;
-        assert_eq!(is_word_size_fn(immediate_mov_byte_8, op), false);
-
-        let immediate_mov_byte_8: u8 = 0b_00000000;
-        let op = Operation::MEMORY_MODE_16;
-
-        assert_eq!(is_word_size_fn(immediate_mov_byte_8, op), false);
-    }
-
     struct get_register_params {
         first_byte: u8,
         second_byte: u8,
-        is_word_size: bool,
-        expected_op: Operation,
+        instruction: Instruction,
         expected_result: &'static str,
         get_reg: bool,
     }
@@ -365,64 +338,88 @@ mod tests {
             get_register_params {
                 first_byte: 0b_11_111_000,
                 second_byte: 0b_00_000_000,
-                is_word_size: true,
-                expected_op: Operation::IMMEDIATE_TO_REGISTER_16,
+                instruction: Instruction {
+                    mnemonic: "",
+                    operation: Operation::IMMEDIATE_TO_REGISTER_16,
+                    is_word_size: true,
+                },
                 expected_result: "ax",
                 get_reg: true,
             },
             get_register_params {
                 first_byte: 0b_11_111_001,
                 second_byte: 0b_00_000_000,
-                is_word_size: false,
-                expected_op: Operation::IMMEDIATE_TO_REGISTER_8,
+                instruction: Instruction {
+                    mnemonic: "",
+                    operation: Operation::IMMEDIATE_TO_REGISTER_16,
+                    is_word_size: false,
+                },
                 expected_result: "cl",
                 get_reg: true,
             },
             get_register_params {
                 first_byte: 0b_11_111_001,
                 second_byte: 0b_00_000_000,
-                is_word_size: false,
-                expected_op: Operation::REGISTER_MODE,
+                instruction: Instruction {
+                    mnemonic: "",
+                    operation: Operation::REGISTER_MODE,
+                    is_word_size: false,
+                },
                 expected_result: "cl",
                 get_reg: false,
             },
             get_register_params {
                 first_byte: 0b_11_111_000,
                 second_byte: 0b_00_000_000,
-                is_word_size: false,
-                expected_op: Operation::MEMORY_MODE_16,
+                instruction: Instruction {
+                    mnemonic: "",
+                    operation: Operation::MEMORY_MODE_16,
+                    is_word_size: false,
+                },
                 expected_result: "bx + si",
                 get_reg: false,
             },
             get_register_params {
                 first_byte: 0b_11_111_110,
                 second_byte: 0b_00_000_000,
-                is_word_size: false,
-                expected_op: Operation::MEMORY_MODE_DIRECT,
+                instruction: Instruction {
+                    mnemonic: "",
+                    operation: Operation::MEMORY_MODE_DIRECT,
+                    is_word_size: false,
+                },
                 expected_result: "bp",
                 get_reg: false,
             },
             get_register_params {
                 first_byte: 0b_11_111_110,
                 second_byte: 0b_00_000_000,
-                is_word_size: false,
-                expected_op: Operation::MEMORY_MODE_16,
+                instruction: Instruction {
+                    mnemonic: "",
+                    operation: Operation::MEMORY_MODE_16,
+                    is_word_size: false,
+                },
                 expected_result: "",
                 get_reg: false,
             },
             get_register_params {
                 first_byte: 0b_00_000_000,
                 second_byte: 0b_00_111_000,
-                is_word_size: false,
-                expected_op: Operation::MEMORY_MODE_16,
+                instruction: Instruction {
+                    mnemonic: "",
+                    operation: Operation::MEMORY_MODE_16,
+                    is_word_size: false,
+                },
                 expected_result: "bh",
                 get_reg: true,
             },
             get_register_params {
                 first_byte: 0b_00_000_000,
                 second_byte: 0b_00_111_000,
-                is_word_size: true,
-                expected_op: Operation::MEMORY_MODE_16,
+                instruction: Instruction {
+                    mnemonic: "",
+                    operation: Operation::MEMORY_MODE_16,
+                    is_word_size: true,
+                },
                 expected_result: "di",
                 get_reg: true,
             },
@@ -434,8 +431,7 @@ mod tests {
                     param.first_byte,
                     param.second_byte,
                     param.get_reg,
-                    param.is_word_size,
-                    param.expected_op
+                    param.instruction
                 ),
                 param.expected_result
             );
