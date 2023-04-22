@@ -36,8 +36,21 @@ bitflags! {
         const IMMEDIATE_TO_REGISTER_8 = 0b_1011_0000;
 
     }
+
     #[derive(PartialEq, Eq)]
-    struct IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS: u8 {
+    struct REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS: u8 {
+        const AX_OR_AL = 0b_00_000_000;
+        const CX_OR_CL = 0b_00_001_000;
+        const DX_OR_DL = 0b_00_010_000;
+        const BX_OR_BL = 0b_00_011_000;
+        const SP_OR_AH = 0b_00_100_000;
+        const BP_OR_CH = 0b_00_101_000;
+        const SI_OR_DH = 0b_00_110_000;
+        const DI_OR_BH = 0b_00_111_000;
+    }
+
+    #[derive(PartialEq, Eq)]
+    struct IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS: u8 {
         const AX_OR_AL = 0b_00_000_000;
         const CX_OR_CL = 0b_00_000_001;
         const DX_OR_DL = 0b_00_000_010;
@@ -77,51 +90,54 @@ fn get_register(
         | (true, Operation::IMMEDIATE_TO_REGISTER_8)
         | (false, Operation::REGISTER_MODE) => {
             let mask_result = first_byte & FIRST_BYTE::IMMEDIATE_OR_REGISTER_MODE_REG_MASK.bits();
-            let mask_cast = IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::from_bits(mask_result)
+            let mask_cast = IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::from_bits(mask_result)
                 .expect("expected bitflag to contain value but it didn't");
 
             return match (instruction.is_word_size, mask_cast) {
-                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::AX_OR_AL) => "ax",
-                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::CX_OR_CL) => "cx",
-                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::DX_OR_DL) => "dx",
-                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::BX_OR_BL) => "bx",
-                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::SP_OR_AH) => "sp",
-                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::BP_OR_CH) => "bp",
-                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::SI_OR_DH) => "si",
-                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::DI_OR_BH) => "di",
+                (true, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::AX_OR_AL) => "ax",
+                (true, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::CX_OR_CL) => "cx",
+                (true, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::DX_OR_DL) => "dx",
+                (true, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::BX_OR_BL) => "bx",
+                (true, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::SP_OR_AH) => "sp",
+                (true, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::BP_OR_CH) => "bp",
+                (true, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::SI_OR_DH) => "si",
+                (true, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::DI_OR_BH) => "di",
                 //
-                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::AX_OR_AL) => "al",
-                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::CX_OR_CL) => "cl",
-                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::DX_OR_DL) => "dl",
-                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::BX_OR_BL) => "bl",
-                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::SP_OR_AH) => "ah",
-                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::BP_OR_CH) => "ch",
-                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::SI_OR_DH) => "dh",
-                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::DI_OR_BH) => "bh",
+                (false, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::AX_OR_AL) => "al",
+                (false, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::CX_OR_CL) => "cl",
+                (false, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::DX_OR_DL) => "dl",
+                (false, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::BX_OR_BL) => "bl",
+                (false, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::SP_OR_AH) => "ah",
+                (false, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::BP_OR_CH) => "ch",
+                (false, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::SI_OR_DH) => "dh",
+                (false, IMMEDIATE_TO_REGISTER_MODE_REG_MASK_RESULTS::DI_OR_BH) => "bh",
                 _ => panic!("Unknown register"),
             };
         }
         (true, _) => {
             // REG REGISTERS
-            let result = second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
-            return match (instruction.is_word_size, result) {
-                (true, 0b00_000_000) => "ax",
-                (true, 0b00_001_000) => "cx",
-                (true, 0b00_010_000) => "dx",
-                (true, 0b00_011_000) => "bx",
-                (true, 0b00_100_000) => "sp",
-                (true, 0b00_101_000) => "bp",
-                (true, 0b00_110_000) => "si",
-                (true, 0b00_111_000) => "di",
+            let mask_result = REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::from_bits(
+                second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits(),
+            )
+            .expect("expected bits but it contained none.");
+            return match (instruction.is_word_size, mask_result) {
+                (true, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::AX_OR_AL) => "ax",
+                (true, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::CX_OR_CL) => "cx",
+                (true, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::DX_OR_DL) => "dx",
+                (true, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::BX_OR_BL) => "bx",
+                (true, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::SP_OR_AH) => "sp",
+                (true, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::BP_OR_CH) => "bp",
+                (true, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::SI_OR_DH) => "si",
+                (true, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::DI_OR_BH) => "di",
                 //
-                (false, 0b00_000_000) => "al",
-                (false, 0b00_001_000) => "cl",
-                (false, 0b00_010_000) => "dl",
-                (false, 0b00_011_000) => "bl",
-                (false, 0b00_100_000) => "ah",
-                (false, 0b00_101_000) => "ch",
-                (false, 0b00_110_000) => "dh",
-                (false, 0b00_111_000) => "bh",
+                (false, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::AX_OR_AL) => "al",
+                (false, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::CX_OR_CL) => "cl",
+                (false, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::DX_OR_DL) => "dl",
+                (false, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::BX_OR_BL) => "bl",
+                (false, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::SP_OR_AH) => "ah",
+                (false, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::BP_OR_CH) => "ch",
+                (false, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::SI_OR_DH) => "dh",
+                (false, REGISTER_TO_OR_MEMORY_REG_MASK_RESULTS::DI_OR_BH) => "bh",
                 _ => panic!("Unknown register"),
             };
         }
