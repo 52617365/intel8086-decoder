@@ -464,7 +464,7 @@ mod tests {
 
     #[test]
     fn test_get_instruction() {
-        let params: [get_instruction_params; 9] = [
+        let params: [get_instruction_params; 10] = [
             get_instruction_params {
                 first_byte: 0b_1011_1000,
                 second_byte: 0b_0000_0000,
@@ -488,6 +488,12 @@ mod tests {
                 second_byte: 0b_11_001_010,
                 expected_op: Operation::REGISTER_MODE,
                 expected_mnemonic: "sub",
+            },
+            get_instruction_params {
+                first_byte: 0b_00_11_1000,
+                second_byte: 0b_11_001_010,
+                expected_op: Operation::REGISTER_MODE,
+                expected_mnemonic: "cmp",
             },
             get_instruction_params {
                 first_byte: 0b_0000_00_00,
