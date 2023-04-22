@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use core::panic;
 use std::{env, fs};
 
@@ -18,6 +19,37 @@ enum Operation {
     MEMORY_MODE_DIRECT, // This is mod 00 with r/m 110 16 bit displacement into a direct memory address
 }
 
+bitflags! {
+    #[derive(PartialEq, Eq)]
+    struct IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS: u8 {
+        const AX_OR_AL = 0b_00_000_000;
+        const CX_OR_CL = 0b_00_000_001;
+        const DX_OR_DL = 0b_00_000_010;
+        const BX_OR_BL = 0b_00_000_011;
+        const SP_OR_AH = 0b_00_000_100;
+        const BP_OR_CH = 0b_00_000_101;
+        const SI_OR_DH = 0b_00_000_110;
+        const DI_OR_BH = 0b_00_000_111;
+    }
+    struct OPERATIONS: u8 {
+        const IMMEDIATE_TO_REGISTER_MASK = 0b_11111000;
+    }
+
+    struct FIRST_BYTE: u8 {
+        const IMMEDIATE_OR_REGISTER_MODE_REG_MASK = 0b_00_000_111;
+        const DEST_REG_MASK = 0b000000_10; // This is the D bit specified after the instruction operand. It's responsible for specifying the destination and source register.
+        const IMMEDIATE_TO_REGISTER_W_MASK = 0b_0000_1000; // This is the W bit of a memory to register, register to memory and register to register move and it's responsible for determining the size of the registers (8 or 16 bit).
+        const MEMORY_TO_REGISTER_VICA_VERCA_W_BIT = 0b000000_01; // This is the W bit of a memory to register, register to memory and register to register move and it's responsible for determining the size of the registers (8 or 16 bit).
+        const REG_FIELD = 0b_00_000_111; // this is used to get the contents of the REG field if it's present in the first byte.
+    }
+
+    struct SECOND_BYTE: u8 {
+        const REGISTER_TO_OR_MEMORY_REG_MASK = 0b_00_111_000; // this is only used for register to register / memory to register and vica verca operations.
+        const MOD_MASK = 0b_11_000_000;
+        const RM_MASK = 0b_00_000_111; // this is used to get the contents of the R/M field
+    }
+
+}
 fn get_register(
     first_byte: u8,
     second_byte: u8,
@@ -29,36 +61,34 @@ fn get_register(
         (true, Operation::IMMEDIATE_TO_REGISTER_16)
         | (true, Operation::IMMEDIATE_TO_REGISTER_8)
         | (false, Operation::REGISTER_MODE) => {
-            const IMMEDIATE_REG_MASK: u8 = 0b_00_000_111;
+            let mask_result = first_byte & FIRST_BYTE::IMMEDIATE_OR_REGISTER_MODE_REG_MASK.bits();
+            let mask_cast =
+                IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::from_bits(mask_result).unwrap();
 
-            let mask_result = first_byte & IMMEDIATE_REG_MASK;
-
-            return match (is_word_size, mask_result) {
-                (true, 0b_00_000_000) => "ax",
-                (true, 0b_00_000_001) => "cx",
-                (true, 0b_00_000_010) => "dx",
-                (true, 0b_00_000_011) => "bx",
-                (true, 0b_00_000_100) => "sp",
-                (true, 0b_00_000_101) => "bp",
-                (true, 0b_00_000_110) => "si",
-                (true, 0b_00_000_111) => "di",
+            return match (is_word_size, mask_cast) {
+                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::AX_OR_AL) => "ax",
+                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::CX_OR_CL) => "cx",
+                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::DX_OR_DL) => "dx",
+                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::BX_OR_BL) => "bx",
+                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::SP_OR_AH) => "sp",
+                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::BP_OR_CH) => "bp",
+                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::SI_OR_DH) => "si",
+                (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::DI_OR_BH) => "di",
                 //
-                (false, 0b_00_000_000) => "al",
-                (false, 0b_00_000_001) => "cl",
-                (false, 0b_00_000_010) => "dl",
-                (false, 0b_00_000_011) => "bl",
-                (false, 0b_00_000_100) => "ah",
-                (false, 0b_00_000_101) => "ch",
-                (false, 0b_00_000_110) => "dh",
-                (false, 0b_00_000_111) => "bh",
+                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::AX_OR_AL) => "al",
+                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::CX_OR_CL) => "cl",
+                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::DX_OR_DL) => "dl",
+                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::BX_OR_BL) => "bl",
+                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::SP_OR_AH) => "ah",
+                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::BP_OR_CH) => "ch",
+                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::SI_OR_DH) => "dh",
+                (false, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::DI_OR_BH) => "bh",
                 _ => panic!("Unknown register"),
             };
         }
-        // REG REGISTERS
         (true, _) => {
-            // basically an else statement for reg registers.
-            const REGISTER_MEMORY_REG_MASK: u8 = 0b00_111_000; // this is only used for register to register / memory to register and vica verca operations.
-            let result = second_byte & REGISTER_MEMORY_REG_MASK;
+            // REG REGISTERS
+            let result = second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
             return match (is_word_size, result) {
                 (true, 0b00_000_000) => "ax",
                 (true, 0b00_001_000) => "cx",
@@ -81,10 +111,9 @@ fn get_register(
             };
         }
 
-        // R/M REGISTERS
         (false, _) => {
-            const RM_MASK: u8 = 0b00_000_111; // this is used to get the contents of the R/M field
-            return match first_byte & RM_MASK {
+            // R/M REGISTERS
+            return match first_byte & FIRST_BYTE::REG_FIELD.bits() {
                 0b00_000_000 => "bx + si",
                 0b00_000_001 => "bx + di",
                 0b00_000_010 => "bp + si",
@@ -106,44 +135,70 @@ fn get_register(
     }
 }
 
+struct Instruction {
+    mnemonic: &'static str,
+    operation: Operation,
+}
 // In this function we have to check both the first byte and second byte because the first byte determines the contents of the second byte.
-fn get_operation(first_byte: u8, second_byte: u8) -> Operation {
-    const IMMEDIATE_TO_REGISTER_MASK: u8 = 0b_11111000;
-    const MOD_MASK: u8 = 0b_11_000_000;
-
+fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
     return match (
-        first_byte & IMMEDIATE_TO_REGISTER_MASK,
-        second_byte & MOD_MASK,
+        first_byte & OPERATIONS::IMMEDIATE_TO_REGISTER_MASK.bits(),
+        second_byte & SECOND_BYTE::MOD_MASK.bits(),
     ) {
-        (0b_1011_1000, _) => Operation::IMMEDIATE_TO_REGISTER_16, // 16 bit immediate to register because first byte is different from others and w bit is set to 1.
-        (0b_1011_0000, _) => Operation::IMMEDIATE_TO_REGISTER_8, // 8 bit immediate to register because first byte is different from others and w bit is set to 0.
-        (_, 0b_11_000_000) => Operation::REGISTER_MODE,
-        (_, 0b_01_000_000) => Operation::MEMORY_MODE_8,
-        (_, 0b_10_000_000) => Operation::MEMORY_MODE_16,
+        (0b_1011_1000, _) => {
+            Instruction {
+                // 16 bit immediate to register because first byte is different from others and w bit is set to 1.
+                operation: Operation::IMMEDIATE_TO_REGISTER_16,
+                mnemonic: "mov",
+            }
+        }
+        (0b_1011_0000, _) => {
+            Instruction {
+                // 8 bit immediate to register because first byte is different from others and w bit is set to 0.
+                operation: Operation::IMMEDIATE_TO_REGISTER_8,
+                mnemonic: "mov",
+            }
+        }
+        (_, 0b_11_000_000) => Instruction {
+            operation: Operation::REGISTER_MODE,
+            mnemonic: "mov",
+        },
+        (_, 0b_01_000_000) => Instruction {
+            operation: Operation::MEMORY_MODE_8,
+            mnemonic: "mov",
+        },
+        (_, 0b_10_000_000) => Instruction {
+            operation: Operation::MEMORY_MODE_16,
+            mnemonic: "mov",
+        },
         (_, 0b_00_000_000) => {
-            const RM_MASK: u8 = 0b_00_000_111; // we are masking the R/M bits here because (MOD = 00 + R/M 110) = 16 bit displacement.
-            let res = second_byte & RM_MASK;
+            // we are masking the R/M bits here because (MOD = 00 + R/M 110) = 16 bit displacement.
+            let res = second_byte & SECOND_BYTE::RM_MASK.bits();
             if res == 0b_00_000_110 {
-                Operation::MEMORY_MODE_DIRECT
+                Instruction {
+                    operation: Operation::MEMORY_MODE_DIRECT,
+                    mnemonic: "mov",
+                }
             } else {
-                Operation::MEMORY_MODE_NONE
+                Instruction {
+                    operation: Operation::MEMORY_MODE_NONE,
+                    mnemonic: "mov",
+                }
             }
         }
         _ => panic!("Unknown operation - get_operation line: {}", line!()),
     };
 }
+
 fn reg_is_dest(byte: u8) -> bool {
-    const DEST_REG_MASK: u8 = 0b000000_10; // This is the D bit specified after the instruction operand. It's responsible for specifying the destination and source register.
-    return byte & DEST_REG_MASK != 0;
+    return byte & FIRST_BYTE::DEST_REG_MASK.bits() != 0;
 }
 
 fn is_word_size_fn(byte: u8, op: Operation) -> bool {
     if op == Operation::IMMEDIATE_TO_REGISTER_16 || op == Operation::IMMEDIATE_TO_REGISTER_8 {
-        const IMMEDIATE_TO_REGISTER_W_MASK: u8 = 0b0000_1_000; // This is the W bit of a memory to register, register to memory and register to register move and it's responsible for determining the size of the registers (8 or 16 bit).
-        return byte & IMMEDIATE_TO_REGISTER_W_MASK != 0;
+        return byte & FIRST_BYTE::IMMEDIATE_TO_REGISTER_W_MASK.bits() != 0;
     } else {
-        const IS_WORD_SIZE_MASK: u8 = 0b000000_01; // This is the W bit of a memory to register, register to memory and register to register move and it's responsible for determining the size of the registers (8 or 16 bit).
-        return byte & IS_WORD_SIZE_MASK != 0;
+        return byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_BIT.bits() != 0;
     }
 }
 
@@ -157,16 +212,26 @@ fn main() {
         let first_byte = binary_contents[i];
         let second_byte = binary_contents[i + 1];
 
-        let op = get_operation(first_byte, second_byte);
+        let instruction = get_instruction(first_byte, second_byte);
 
-        let is_word_size = is_word_size_fn(first_byte, op);
+        let is_word_size = is_word_size_fn(first_byte, instruction.operation);
 
-        // let reg_register = get_reg_register(first_byte, second_byte, is_word_size, op);
-        // let rm_register = get_rm_register(second_byte, is_word_size, op);
-        let reg_register = get_register(first_byte, second_byte, true, is_word_size, op);
-        let rm_register = get_register(first_byte, second_byte, false, is_word_size, op);
+        let reg_register = get_register(
+            first_byte,
+            second_byte,
+            true,
+            is_word_size,
+            instruction.operation,
+        );
+        let rm_register = get_register(
+            first_byte,
+            second_byte,
+            false,
+            is_word_size,
+            instruction.operation,
+        );
 
-        let mut disp: Option<usize> = match op {
+        let mut disp: Option<usize> = match instruction.operation {
             Operation::MEMORY_MODE_8 => {
                 let displacement = binary_contents[i + 2];
                 i += 1; // adding one to not go off course in the loop.
@@ -201,7 +266,9 @@ fn main() {
         let reg_is_dest = reg_is_dest(first_byte);
         // When dealing immediate to register instructions, reg is always on the lefthand side so we don't have to check for it.
         // We are also unwrapping disp because we have covered the cases on the previous branch and are sure that it contains a value.
-        if op == Operation::IMMEDIATE_TO_REGISTER_8 || op == Operation::IMMEDIATE_TO_REGISTER_16 {
+        if instruction.operation == Operation::IMMEDIATE_TO_REGISTER_8
+            || instruction.operation == Operation::IMMEDIATE_TO_REGISTER_16
+        {
             println!(
                 "{} {}, {}",
                 "mov",
@@ -213,27 +280,39 @@ fn main() {
         } else {
             match (reg_is_dest, disp) {
                 (true, Some(disp)) => {
-                    if op == Operation::MEMORY_MODE_DIRECT {
-                        println!("{} {}, [{}]", "mov", reg_register, disp);
+                    if instruction.operation == Operation::MEMORY_MODE_DIRECT {
+                        println!("{} {}, [{}]", instruction.mnemonic, reg_register, disp);
                     } else {
-                        println!("{} {}, [{} + {}]", "mov", reg_register, rm_register, disp);
+                        println!(
+                            "{} {}, [{} + {}]",
+                            instruction.mnemonic, reg_register, rm_register, disp
+                        );
                     }
                 }
                 (false, Some(disp)) => {
-                    println!("{} [{} + {}], {}", "mov", rm_register, disp, reg_register);
+                    println!(
+                        "{} [{} + {}], {}",
+                        instruction.mnemonic, rm_register, disp, reg_register
+                    );
                 }
                 (true, None) => {
-                    if op == Operation::REGISTER_MODE {
-                        println!("{} {}, {}", "mov", reg_register, rm_register);
+                    if instruction.operation == Operation::REGISTER_MODE {
+                        println!("{} {}, {}", instruction.mnemonic, reg_register, rm_register);
                     } else {
-                        println!("{} {}, [{}]", "mov", reg_register, rm_register);
+                        println!(
+                            "{} {}, [{}]",
+                            instruction.mnemonic, reg_register, rm_register
+                        );
                     }
                 }
                 (false, None) => {
-                    if op == Operation::REGISTER_MODE {
-                        println!("{} {}, {}", "mov", rm_register, reg_register);
+                    if instruction.operation == Operation::REGISTER_MODE {
+                        println!("{} {}, {}", instruction.mnemonic, rm_register, reg_register);
                     } else {
-                        println!("{} [{}], {}", "mov", rm_register, reg_register);
+                        println!(
+                            "{} [{}], {}",
+                            instruction.mnemonic, rm_register, reg_register
+                        );
                     }
                 }
             }
@@ -410,7 +489,7 @@ mod tests {
         ];
         for param in params {
             assert_eq!(
-                get_operation(param.first_byte, param.second_byte),
+                get_instruction(param.first_byte, param.second_byte).operation,
                 param.expected_op
             );
         }
