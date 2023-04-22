@@ -21,6 +21,22 @@ enum Operation {
 
 bitflags! {
     #[derive(PartialEq, Eq)]
+    // these results are used to determine the mode that is going to be done for example:
+    // Register to register, memory to register, immediate value to register etc.
+    struct MOD_MODE_RESULTS: u8 {
+        const REGISTER_MODE = 0b_11_000_000;
+        const MEMORY_MODE_8 = 0b_01_000_000;
+        const MEMORY_MODE_16 = 0b_10_000_000;
+        const MEMORY_MODE = 0b_00_000_000; // (Only if r/m is not 110, then its a 16 bit placement).
+    }
+
+    #[derive(PartialEq, Eq)]
+    struct IMMEDIATE_TO_REGISTER_MASK_RESULTS: u8 {
+        const IMMEDIATE_TO_REGISTER_16= 0b_1011_1000;
+        const IMMEDIATE_TO_REGISTER_8 = 0b_1011_0000;
+
+    }
+    #[derive(PartialEq, Eq)]
     struct IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS: u8 {
         const AX_OR_AL = 0b_00_000_000;
         const CX_OR_CL = 0b_00_000_001;
@@ -61,8 +77,8 @@ fn get_register(
         | (true, Operation::IMMEDIATE_TO_REGISTER_8)
         | (false, Operation::REGISTER_MODE) => {
             let mask_result = first_byte & FIRST_BYTE::IMMEDIATE_OR_REGISTER_MODE_REG_MASK.bits();
-            let mask_cast =
-                IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::from_bits(mask_result).unwrap();
+            let mask_cast = IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::from_bits(mask_result)
+                .expect("expected bitflag to contain value but it didn't");
 
             return match (instruction.is_word_size, mask_cast) {
                 (true, IMMEDIATE_OR_REGISTER_MODE_REG_MASK_RESULTS::AX_OR_AL) => "ax",
@@ -142,11 +158,16 @@ struct Instruction {
 }
 // In this function we have to check both the first byte and second byte because the first byte determines the contents of the second byte.
 fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
-    return match (
+    let immediate_to_reg = IMMEDIATE_TO_REGISTER_MASK_RESULTS::from_bits(
         first_byte & OPERATIONS::IMMEDIATE_TO_REGISTER_MASK.bits(),
-        second_byte & SECOND_BYTE::MOD_MASK.bits(),
-    ) {
-        (0b_1011_1000, _) => {
+    )
+    .expect("expected bitflag to contain value but it didn't");
+
+    let mod_results = MOD_MODE_RESULTS::from_bits(second_byte & SECOND_BYTE::MOD_MASK.bits())
+        .expect("expected bitflag to contain value but it didn't");
+
+    return match (immediate_to_reg, mod_results) {
+        (IMMEDIATE_TO_REGISTER_MASK_RESULTS::IMMEDIATE_TO_REGISTER_16, _) => {
             Instruction {
                 // 16 bit immediate to register because first byte is different from others and w bit is set to 1.
                 operation: Operation::IMMEDIATE_TO_REGISTER_16,
@@ -154,7 +175,7 @@ fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
                 is_word_size: first_byte & FIRST_BYTE::IMMEDIATE_TO_REGISTER_W_MASK.bits() != 0,
             }
         }
-        (0b_1011_0000, _) => {
+        (IMMEDIATE_TO_REGISTER_MASK_RESULTS::IMMEDIATE_TO_REGISTER_8, _) => {
             Instruction {
                 // 8 bit immediate to register because first byte is different from others and w bit is set to 0.
                 operation: Operation::IMMEDIATE_TO_REGISTER_8,
@@ -162,22 +183,22 @@ fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
                 is_word_size: first_byte & FIRST_BYTE::IMMEDIATE_TO_REGISTER_W_MASK.bits() != 0,
             }
         }
-        (_, 0b_11_000_000) => Instruction {
+        (_, MOD_MODE_RESULTS::REGISTER_MODE) => Instruction {
             operation: Operation::REGISTER_MODE,
             mnemonic: "mov",
             is_word_size: first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_BIT.bits() != 0,
         },
-        (_, 0b_01_000_000) => Instruction {
+        (_, MOD_MODE_RESULTS::MEMORY_MODE_8) => Instruction {
             operation: Operation::MEMORY_MODE_8,
             mnemonic: "mov",
             is_word_size: first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_BIT.bits() != 0,
         },
-        (_, 0b_10_000_000) => Instruction {
+        (_, MOD_MODE_RESULTS::MEMORY_MODE_16) => Instruction {
             operation: Operation::MEMORY_MODE_16,
             mnemonic: "mov",
             is_word_size: first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_BIT.bits() != 0,
         },
-        (_, 0b_00_000_000) => {
+        (_, MOD_MODE_RESULTS::MEMORY_MODE) => {
             // we are masking the R/M bits here because (MOD = 00 + R/M 110) = 16 bit displacement.
             let res = second_byte & SECOND_BYTE::RM_MASK.bits();
             if res == 0b_00_000_110 {
@@ -314,7 +335,6 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use crate::{get_operation, get_register, is_word_size, reg_is_dest, Operation};
 
     #[test]
     fn test_reg_is_dest() {
