@@ -19,6 +19,14 @@ enum Operation {
     MEMORY_MODE_16,     // 16 bit displacement
     MEMORY_MODE_NONE,   // No displacement expect if R/M is 110, then it's 16 bit direct address.
     MEMORY_MODE_DIRECT, // This is mod 00 with r/m 110 16 bit displacement into a direct memory address
+
+    // This is actually different from the first immediate to memory field because it relies on both first and second byte
+    // to determine the mnemonic and size of the possible immediate.
+    // If S = 1 && W = 1 then it's a 16-bit immediate, else 8-bit. -
+    // We also have to check the first byte to determine the mnemonic because the add and mov instruction use the same reg bits acquired from the
+    // second byte.
+    IMMEDIATE_TO_REGISTER_OR_MEMORY_16,
+    IMMEDIATE_TO_REGISTER_OR_MEMORY_8,
 }
 
 fn get_register(
@@ -120,36 +128,162 @@ struct Instruction {
     is_word_size: bool,
 }
 // In this function we have to check both the first byte and second byte because the first byte determines the contents of the second byte.
+// TODO: we actually don't even need to get the word size because it's already handled but because some code relies on it we still keep it.
 fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
-    let immediate_to_reg: u8 = first_byte & OPERATIONS::IMMEDIATE_TO_REGISTER_MASK.bits();
-    let immediate_to_reg_casted = IMMEDIATE_TO_REGISTER_MASK_RESULTS::from_bits(immediate_to_reg);
-
-    if let Some(casted_val) = immediate_to_reg_casted {
-        match casted_val {
-            IMMEDIATE_TO_REGISTER_MASK_RESULTS::IMMEDIATE_TO_REGISTER_16 => {
-                return Instruction {
-                    // 16 bit immediate to register because first byte is different from others and w bit is set to 1.
-                    operation: Operation::IMMEDIATE_TO_REGISTER_16,
-                    mnemonic: "mov",
-                    is_word_size: first_byte & FIRST_BYTE::IMMEDIATE_TO_REGISTER_W_MASK.bits() != 0,
-                };
-            }
-            IMMEDIATE_TO_REGISTER_MASK_RESULTS::IMMEDIATE_TO_REGISTER_8 => {
-                return Instruction {
-                    // 8 bit immediate to register because first byte is different from others and w bit is set to 0.
-                    operation: Operation::IMMEDIATE_TO_REGISTER_8,
-                    mnemonic: "mov",
-                    is_word_size: first_byte & FIRST_BYTE::IMMEDIATE_TO_REGISTER_W_MASK.bits() != 0,
-                };
-            }
-            _ => (), // we want to continue to the next branch.
-        }
+    // we handle the edge case where the mov immediate to register is being used, different bit patterns are being used
+    // for other mnemonics usually.
+    if let Some(value) = get_immediate_to_register_if_present(first_byte) {
+        return value;
     }
 
-    // "expected cast to contain correct bits but it didnt. First byte was: {:08b} and second byte was: {:08b}, it contained: {:08b} after bit manipulations.",
-    // first_byte, second_byte, immediate_to_reg
-    let mod_results = MOD_MODE_RESULTS::from_bits(second_byte & SECOND_BYTE::MOD_MASK.bits())
-        .expect("expected bitflag to contain value but it didn't");
+    let immediate_to_register_or_memory_results =
+        first_byte & OPERATIONS::IMMEDIATE_TO_REGISTER_OR_MEMORY.bits();
+
+    // TODO: handle the second bit pattern for immediate to register.
+    if let Some(casted_value) =
+        IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::from_bits(immediate_to_register_or_memory_results)
+    {
+        match casted_value {
+            IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::MOV_MOVE_8 => {
+                let second_byte_reg_results =
+                    second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
+
+                let second_byte_reg_results_casted =
+                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::from_bits(second_byte_reg_results)
+                        .expect(&format!("MOV_MOVE_8, we expected the second byte to contains 000 in the reg field but it didnt, first byte contained: {:08b} and the second byte we matched contained {:08b}, the result was {:08b}.",first_byte, second_byte, second_byte_reg_results));
+
+                if second_byte_reg_results_casted
+                    == IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::MOV_OR_ADD_RESULT
+                {
+                    // here its mov, not add because of first byte.
+                    return Instruction {
+                        mnemonic: "mov",
+                        operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_8,
+                        is_word_size: first_byte
+                            & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                            != 0,
+                    };
+                }
+            }
+            IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::MOV_MOVE_16 => {
+                let second_byte_reg_results =
+                    second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
+
+                let second_byte_reg_results_casted =
+                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::from_bits(second_byte_reg_results)
+                        .expect(&format!("MOV_MOVE_16, we expected the second byte to contains 000 in the reg field but it didnt, first byte contained: {:08b} and the second byte we matched contained {:08b}, the result was {:08b}.",first_byte, second_byte, second_byte_reg_results));
+
+                if second_byte_reg_results_casted
+                    == IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::MOV_OR_ADD_RESULT
+                {
+                    // here its mov, not add because of first byte.
+                    return Instruction {
+                        mnemonic: "mov",
+                        operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_16,
+                        is_word_size: first_byte
+                            & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                            != 0,
+                    };
+                }
+            }
+            IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::SUB_OR_CMP_MOVE_8 => {
+                let second_byte_reg_results =
+                    second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
+
+                let second_byte_reg_results_casted =
+                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::from_bits(second_byte_reg_results)
+                        .expect(&format!("SUB_OR_CMP_MOVE_8, we expected the second byte to contains 101 or 111 in the reg field but it didnt, first byte contained: {:08b} and the second byte we matched contained {:08b}, the result was {:08b}.", first_byte, second_byte, second_byte_reg_results));
+
+                match second_byte_reg_results_casted {
+                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::SUB_RESULT => {
+                        // We determined that its sub because even though the first byte was the same, the reg field in the second
+                        // byte gave it away (it was 101. aka SUB)
+                        return Instruction {
+                            mnemonic: "sub",
+                            operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_8,
+                            is_word_size: first_byte
+                                & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                                != 0,
+                        };
+                    }
+                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::CMP_RESULT => {
+                        // We determined that its sub because even though the first byte was the same, the reg field in the second
+                        // byte gave it away (it was 111. aka CMP)
+                        return Instruction {
+                            mnemonic: "sub",
+                            operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_8,
+                            is_word_size: first_byte
+                                & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                                != 0,
+                        };
+                    }
+                    _ => (),
+                }
+                if second_byte_reg_results_casted
+                    == IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::MOV_OR_ADD_RESULT
+                {
+                    // here its mov, not add because of first byte.
+                    return Instruction {
+                        mnemonic: "mov",
+                        operation: Operation::IMMEDIATE_TO_REGISTER_16,
+                        is_word_size: first_byte
+                            & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                            != 0,
+                    };
+                }
+            }
+            IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::SUB_OR_CMP_MOVE_16 => {
+                let second_byte_reg_results =
+                    second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
+
+                let second_byte_reg_results_casted =
+                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::from_bits(second_byte_reg_results)
+                        .expect(&format!("SUB_OR_CMP_MOVE_8, we expected the second byte to contains 101 or 111 in the reg field but it didnt, first byte contained: {:08b} and the second byte we matched contained {:08b}, the result was {:08b}.", first_byte, second_byte, second_byte_reg_results));
+
+                match second_byte_reg_results_casted {
+                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::SUB_RESULT => {
+                        // We determined that its sub because even though the first byte was the same, the reg field in the second
+                        // byte gave it away (it was 101. aka SUB)
+                        return Instruction {
+                            mnemonic: "sub",
+                            operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_16,
+                            is_word_size: first_byte
+                                & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                                != 0,
+                        };
+                    }
+                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::CMP_RESULT => {
+                        // We determined that its sub because even though the first byte was the same, the reg field in the second
+                        // byte gave it away (it was 111. aka CMP)
+                        return Instruction {
+                            mnemonic: "sub",
+                            operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_16,
+                            is_word_size: first_byte
+                                & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                                != 0,
+                        };
+                    }
+                    _ => (),
+                }
+                if second_byte_reg_results_casted
+                    == IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::MOV_OR_ADD_RESULT
+                {
+                    // here its mov, not add because of first byte.
+                    return Instruction {
+                        mnemonic: "mov",
+                        operation: Operation::IMMEDIATE_TO_REGISTER_16,
+                        is_word_size: first_byte
+                            & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                            != 0,
+                    };
+                }
+            }
+            _ => (),
+        };
+    }
+
+    let mod_results = second_byte & SECOND_BYTE::MOD_MASK.bits();
+    let mod_results = MOD_MODE_RESULTS::from_bits(mod_results).expect(&format!("expected cast to contain correct bits but it didnt. First byte was: {:08b} and second byte was: {:08b}, it contained: {:08b} after bit manipulations.", first_byte, second_byte, mod_results));
 
     return match mod_results {
         MOD_MODE_RESULTS::REGISTER_MODE => {
@@ -249,6 +383,33 @@ fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
     };
 }
 
+fn get_immediate_to_register_if_present(first_byte: u8) -> Option<Instruction> {
+    let immediate_to_reg: u8 = first_byte & OPERATIONS::IMMEDIATE_TO_REGISTER_MASK.bits();
+    let immediate_to_reg_casted = IMMEDIATE_TO_REGISTER_MASK_RESULTS::from_bits(immediate_to_reg);
+    if let Some(casted_val) = immediate_to_reg_casted {
+        match casted_val {
+            IMMEDIATE_TO_REGISTER_MASK_RESULTS::IMMEDIATE_TO_REGISTER_16 => {
+                return Some(Instruction {
+                    // 16 bit immediate to register because first byte is different from others and w bit is set to 1.
+                    operation: Operation::IMMEDIATE_TO_REGISTER_16,
+                    mnemonic: "mov",
+                    is_word_size: first_byte & FIRST_BYTE::IMMEDIATE_TO_REGISTER_W_MASK.bits() != 0,
+                });
+            }
+            IMMEDIATE_TO_REGISTER_MASK_RESULTS::IMMEDIATE_TO_REGISTER_8 => {
+                return Some(Instruction {
+                    // 8 bit immediate to register because first byte is different from others and w bit is set to 0.
+                    operation: Operation::IMMEDIATE_TO_REGISTER_8,
+                    mnemonic: "mov",
+                    is_word_size: first_byte & FIRST_BYTE::IMMEDIATE_TO_REGISTER_W_MASK.bits() != 0,
+                });
+            }
+            _ => (), // we want to continue to the next branch if we fail to cast to the enum (expected behavior.)
+        }
+    }
+    None
+}
+
 fn reg_is_dest(byte: u8) -> bool {
     return byte & FIRST_BYTE::D_BIT_MASK.bits() != 0;
 }
@@ -298,6 +459,13 @@ fn main() {
             }
             Operation::IMMEDIATE_TO_REGISTER_8 => Some(second_byte as usize),
             Operation::REGISTER_MODE | Operation::MEMORY_MODE_NONE => None,
+            Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_16 => {
+                todo!()
+            }
+
+            Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_8 => {
+                todo!()
+            }
         };
 
         // Handling the case where for example there is a displacement like mov [bp + 0], ch which is an useless displacement.
@@ -520,6 +688,7 @@ mod tests {
                 expected_mnemonic: "mov",
             },
             get_instruction_params {
+                // TODO: there is a problem with this and immediate values.
                 first_byte: 0b_0000_00_00,
                 second_byte: 0b_11_001_010,
                 expected_op: Operation::REGISTER_MODE,

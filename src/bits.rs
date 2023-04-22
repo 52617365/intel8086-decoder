@@ -1,6 +1,28 @@
 use bitflags::bitflags;
 bitflags! {
     #[derive(PartialEq, Eq)]
+    pub struct IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS: u8 {
+        // TODO: figure out if the second last bit matters if last (w) is set to 0. (Same applies to all instructions here)
+        const MOV_MOVE_8 = 0b_11_000_110;
+        const MOV_MOVE_16 = 0b_11_000_111;
+        const ADD_MOVE_8 = 0b_10_000_010;
+        const ADD_MOVE_16 = 0b_10_000_011;
+        const SUB_OR_CMP_MOVE_8 = 0b_10_000_010;
+        const SUB_OR_CMP_MOVE_16 = 0b_10_000_011;
+    }
+
+    #[derive(PartialEq, Eq)]
+    // This is fetched from the second bytes reg field which is 3 bits.
+    pub struct IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS: u8 {
+        // this is either mov or add because their reg fields are the same.
+        // the difference is determined by the first byte and we're going to handle the first byte first in this case.
+        const MOV_OR_ADD_RESULT = 0b_00_000_000;
+        //
+        const SUB_RESULT = 0b_00_101_000;
+        const CMP_RESULT = 0b_00_111_000;
+    }
+
+    #[derive(PartialEq, Eq)]
     pub struct MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS: u8{
        const MOV = 0b_10001000;
        const ADD = 0b_00000000;
@@ -58,8 +80,10 @@ bitflags! {
         const SI_OR_DH = 0b_00_000_110;
         const DI_OR_BH = 0b_00_000_111;
     }
+
     pub struct OPERATIONS: u8 {
         const IMMEDIATE_TO_REGISTER_MASK = 0b_11111000;
+        const IMMEDIATE_TO_REGISTER_OR_MEMORY = 0b_11111111; // This actually relies on the second byte also since its mod field determines which mnemonic is being used.
     }
 
     pub struct FIRST_BYTE: u8 {
@@ -69,10 +93,12 @@ bitflags! {
         const MEMORY_TO_REGISTER_VICA_VERCA_W_MASK = 0b000000_01; // This is the W bit of a memory to register, register to memory and register to register move and it's responsible for determining the size of the registers (8 or 16 bit).
         const IMMEDIATE_TO_REGISTER_REG_FIELD_MASK = 0b_00_000_111; // this is used to get the contents of the REG field if it's present in the first byte.
         const MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK = 0b_11111100; // To determine what mnemonic is being used.
+        const IMMEDIATE_TO_REGISTER_OR_MEMORY_W_BIT = 0b_00000001; // This instruction actually relies on the second byte also since its mod field determines which mnemonic is being used.
+        const IMMEDIATE_TO_REGISTER_OR_MEMORY_S_BIT = 0b_00000010; // If this (S bit) is set to 1, and W = 1 then
     }
 
     pub struct SECOND_BYTE: u8 {
-        const REGISTER_TO_OR_MEMORY_REG_MASK = 0b_00_111_000; // this is only used for register to register / memory to register and vica verca operations.
+        const REGISTER_TO_OR_MEMORY_REG_MASK = 0b_00_111_000; // this is only used for immediate with register / memory and register to register / memory to register and vica verca operations.
         const MOD_MASK = 0b_11_000_000;
         const RM_MASK = 0b_00_000_111; // this is used to get the contents of the R/M field
     }
