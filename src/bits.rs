@@ -5,8 +5,6 @@ bitflags! {
         // TODO: figure out if the second last bit matters if last (w) is set to 0. (Same applies to all instructions here)
         const MOV_MOVE_8 = 0b_11_000_110;
         const MOV_MOVE_16 = 0b_11_000_111;
-        const ADD_MOVE_8 = 0b_10_000_010;
-        const ADD_MOVE_16 = 0b_10_000_011;
         const SUB_OR_CMP_MOVE_8 = 0b_10_000_010;
         const SUB_OR_CMP_MOVE_16 = 0b_10_000_011;
     }

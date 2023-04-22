@@ -136,150 +136,8 @@ fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
         return value;
     }
 
-    let immediate_to_register_or_memory_results =
-        first_byte & OPERATIONS::IMMEDIATE_TO_REGISTER_OR_MEMORY.bits();
-
-    // TODO: handle the second bit pattern for immediate to register.
-    if let Some(casted_value) =
-        IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::from_bits(immediate_to_register_or_memory_results)
-    {
-        match casted_value {
-            IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::MOV_MOVE_8 => {
-                let second_byte_reg_results =
-                    second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
-
-                let second_byte_reg_results_casted =
-                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::from_bits(second_byte_reg_results)
-                        .expect(&format!("MOV_MOVE_8, we expected the second byte to contains 000 in the reg field but it didnt, first byte contained: {:08b} and the second byte we matched contained {:08b}, the result was {:08b}.",first_byte, second_byte, second_byte_reg_results));
-
-                if second_byte_reg_results_casted
-                    == IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::MOV_OR_ADD_RESULT
-                {
-                    // here its mov, not add because of first byte.
-                    return Instruction {
-                        mnemonic: "mov",
-                        operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_8,
-                        is_word_size: first_byte
-                            & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
-                            != 0,
-                    };
-                }
-            }
-            IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::MOV_MOVE_16 => {
-                let second_byte_reg_results =
-                    second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
-
-                let second_byte_reg_results_casted =
-                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::from_bits(second_byte_reg_results)
-                        .expect(&format!("MOV_MOVE_16, we expected the second byte to contains 000 in the reg field but it didnt, first byte contained: {:08b} and the second byte we matched contained {:08b}, the result was {:08b}.",first_byte, second_byte, second_byte_reg_results));
-
-                if second_byte_reg_results_casted
-                    == IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::MOV_OR_ADD_RESULT
-                {
-                    // here its mov, not add because of first byte.
-                    return Instruction {
-                        mnemonic: "mov",
-                        operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_16,
-                        is_word_size: first_byte
-                            & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
-                            != 0,
-                    };
-                }
-            }
-            IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::SUB_OR_CMP_MOVE_8 => {
-                let second_byte_reg_results =
-                    second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
-
-                let second_byte_reg_results_casted =
-                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::from_bits(second_byte_reg_results)
-                        .expect(&format!("SUB_OR_CMP_MOVE_8, we expected the second byte to contains 101 or 111 in the reg field but it didnt, first byte contained: {:08b} and the second byte we matched contained {:08b}, the result was {:08b}.", first_byte, second_byte, second_byte_reg_results));
-
-                match second_byte_reg_results_casted {
-                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::SUB_RESULT => {
-                        // We determined that its sub because even though the first byte was the same, the reg field in the second
-                        // byte gave it away (it was 101. aka SUB)
-                        return Instruction {
-                            mnemonic: "sub",
-                            operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_8,
-                            is_word_size: first_byte
-                                & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
-                                != 0,
-                        };
-                    }
-                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::CMP_RESULT => {
-                        // We determined that its sub because even though the first byte was the same, the reg field in the second
-                        // byte gave it away (it was 111. aka CMP)
-                        return Instruction {
-                            mnemonic: "sub",
-                            operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_8,
-                            is_word_size: first_byte
-                                & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
-                                != 0,
-                        };
-                    }
-                    _ => (),
-                }
-                if second_byte_reg_results_casted
-                    == IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::MOV_OR_ADD_RESULT
-                {
-                    // here its mov, not add because of first byte.
-                    return Instruction {
-                        mnemonic: "mov",
-                        operation: Operation::IMMEDIATE_TO_REGISTER_16,
-                        is_word_size: first_byte
-                            & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
-                            != 0,
-                    };
-                }
-            }
-            IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::SUB_OR_CMP_MOVE_16 => {
-                let second_byte_reg_results =
-                    second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
-
-                let second_byte_reg_results_casted =
-                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::from_bits(second_byte_reg_results)
-                        .expect(&format!("SUB_OR_CMP_MOVE_8, we expected the second byte to contains 101 or 111 in the reg field but it didnt, first byte contained: {:08b} and the second byte we matched contained {:08b}, the result was {:08b}.", first_byte, second_byte, second_byte_reg_results));
-
-                match second_byte_reg_results_casted {
-                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::SUB_RESULT => {
-                        // We determined that its sub because even though the first byte was the same, the reg field in the second
-                        // byte gave it away (it was 101. aka SUB)
-                        return Instruction {
-                            mnemonic: "sub",
-                            operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_16,
-                            is_word_size: first_byte
-                                & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
-                                != 0,
-                        };
-                    }
-                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::CMP_RESULT => {
-                        // We determined that its sub because even though the first byte was the same, the reg field in the second
-                        // byte gave it away (it was 111. aka CMP)
-                        return Instruction {
-                            mnemonic: "sub",
-                            operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_16,
-                            is_word_size: first_byte
-                                & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
-                                != 0,
-                        };
-                    }
-                    _ => (),
-                }
-                if second_byte_reg_results_casted
-                    == IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::MOV_OR_ADD_RESULT
-                {
-                    // here its mov, not add because of first byte.
-                    return Instruction {
-                        mnemonic: "mov",
-                        operation: Operation::IMMEDIATE_TO_REGISTER_16,
-                        is_word_size: first_byte
-                            & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
-                            != 0,
-                    };
-                }
-            }
-            _ => (),
-        };
+    if let Some(value) = get_immediate_to_register_or_memory_if_present(first_byte, second_byte) {
+        return value;
     }
 
     let mod_results = second_byte & SECOND_BYTE::MOD_MASK.bits();
@@ -381,6 +239,115 @@ fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
         }
         _ => panic!("Unknown operation - get_operation line: {}", line!()),
     };
+}
+
+fn get_immediate_to_register_or_memory_if_present(
+    first_byte: u8,
+    second_byte: u8,
+) -> Option<Instruction> {
+    let immediate_to_register_or_memory_results =
+        first_byte & OPERATIONS::IMMEDIATE_TO_REGISTER_OR_MEMORY.bits();
+
+    if let Some(casted_value) =
+        IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::from_bits(immediate_to_register_or_memory_results)
+    {
+        match casted_value {
+            IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::MOV_MOVE_8
+            | IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::MOV_MOVE_16 => {
+                let second_byte_reg_results =
+                    second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
+
+                let second_byte_reg_results_casted =
+                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::from_bits(second_byte_reg_results)
+                        .expect(&format!("MOV_MOVE_8, we expected the second byte to contains 000 in the reg field but it didnt, first byte contained: {:08b} and the second byte we matched contained {:08b}, the result was {:08b}.",first_byte, second_byte, second_byte_reg_results));
+
+                if second_byte_reg_results_casted
+                    == IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::MOV_OR_ADD_RESULT
+                {
+                    // here its mov, not add because of first byte.
+
+                    if let IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::MOV_MOVE_8 = casted_value {
+                        return Some(Instruction {
+                            mnemonic: "mov",
+                            operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_8,
+                            is_word_size: first_byte
+                                & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                                != 0,
+                        });
+                    } else {
+                        return Some(Instruction {
+                            mnemonic: "mov",
+                            operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_16,
+                            is_word_size: first_byte
+                                & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                                != 0,
+                        });
+                    }
+                }
+            }
+            IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::SUB_OR_CMP_MOVE_8
+            | IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::SUB_OR_CMP_MOVE_16 => {
+                let second_byte_reg_results =
+                    second_byte & SECOND_BYTE::REGISTER_TO_OR_MEMORY_REG_MASK.bits();
+
+                let second_byte_reg_results_casted =
+                    IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::from_bits(second_byte_reg_results)
+                        .expect(&format!("SUB_OR_CMP_MOVE_8, we expected the second byte to contains 101 or 111 in the reg field but it didnt, first byte contained: {:08b} and the second byte we matched contained {:08b}, the result was {:08b}.", first_byte, second_byte, second_byte_reg_results));
+
+                if let IMMEDIATE_TO_REGISTER_OR_MEMORY_RESULTS::SUB_OR_CMP_MOVE_8 = casted_value {
+                    match second_byte_reg_results_casted {
+                        IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::SUB_RESULT => {
+                            // We determined that its sub because even though the first byte was the same, the reg field in the second
+                            // byte gave it away (it was 101. aka SUB)
+                            return Some(Instruction {
+                                mnemonic: "sub",
+                                operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_8,
+                                is_word_size: first_byte
+                                    & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                                    != 0,
+                            });
+                        }
+                        IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::CMP_RESULT => {
+                            return Some(Instruction {
+                                mnemonic: "cmp",
+                                operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_8,
+                                is_word_size: first_byte
+                                    & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                                    != 0,
+                            });
+                        }
+                        _ => (),
+                    }
+                } else {
+                    match second_byte_reg_results_casted {
+                        IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::SUB_RESULT => {
+                            // We determined that its sub because even though the first byte was the same, the reg field in the second
+                            // byte gave it away (it was 101. aka SUB)
+                            return Some(Instruction {
+                                mnemonic: "sub",
+                                operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_16,
+                                is_word_size: first_byte
+                                    & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                                    != 0,
+                            });
+                        }
+                        IMMEDIATE_TO_REGISTER_OR_MEMORY_REG_RESULTS::CMP_RESULT => {
+                            return Some(Instruction {
+                                mnemonic: "cmp",
+                                operation: Operation::IMMEDIATE_TO_REGISTER_OR_MEMORY_16,
+                                is_word_size: first_byte
+                                    & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                                    != 0,
+                            });
+                        }
+                        _ => (),
+                    }
+                }
+            }
+            _ => (),
+        };
+    }
+    None
 }
 
 fn get_immediate_to_register_if_present(first_byte: u8) -> Option<Instruction> {
