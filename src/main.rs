@@ -21,6 +21,17 @@ enum Operation {
 
 bitflags! {
     #[derive(PartialEq, Eq)]
+    struct IMMEDIATE_TO_REGISTER_REG_FIELD_MASK_RESULTS: u8 {
+        const BX_PLUS_SI = 0b00_000_000;
+        const BX_PLUS_DI = 0b00_000_001;
+        const BP_PLUS_SI = 0b00_000_010;
+        const BP_PLUS_DI = 0b00_000_011;
+        const SI = 0b_00_000_100;
+        const DI = 0b00_000_101;
+        const BP_OR_NONE = 0b00_000_110;
+        const BX = 0b_00_000_111;
+    }
+    #[derive(PartialEq, Eq)]
     // these results are used to determine the mode that is going to be done for example:
     // Register to register, memory to register, immediate value to register etc.
     struct MOD_MODE_RESULTS: u8 {
@@ -69,7 +80,7 @@ bitflags! {
         const DEST_REG_MASK = 0b000000_10; // This is the D bit specified after the instruction operand. It's responsible for specifying the destination and source register.
         const IMMEDIATE_TO_REGISTER_W_MASK = 0b_0000_1000; // This is the W bit of a memory to register, register to memory and register to register move and it's responsible for determining the size of the registers (8 or 16 bit).
         const MEMORY_TO_REGISTER_VICA_VERCA_W_BIT = 0b000000_01; // This is the W bit of a memory to register, register to memory and register to register move and it's responsible for determining the size of the registers (8 or 16 bit).
-        const REG_FIELD = 0b_00_000_111; // this is used to get the contents of the REG field if it's present in the first byte.
+        const IMMEDIATE_TO_REGISTER_REG_FIELD_MASK = 0b_00_000_111; // this is used to get the contents of the REG field if it's present in the first byte.
     }
 
     struct SECOND_BYTE: u8 {
@@ -143,22 +154,27 @@ fn get_register(
         }
 
         (false, _) => {
-            // R/M REGISTERS
-            return match first_byte & FIRST_BYTE::REG_FIELD.bits() {
-                0b00_000_000 => "bx + si",
-                0b00_000_001 => "bx + di",
-                0b00_000_010 => "bp + si",
-                0b00_000_011 => "bp + di",
-                0b00_000_100 => "si",
-                0b00_000_101 => "di",
-                0b00_000_110 => {
+            // This uses the reg field from mov immediate to register, the reg field in this instruction
+            // is in the first byte when normally its in the second byte.
+            let res = IMMEDIATE_TO_REGISTER_REG_FIELD_MASK_RESULTS::from_bits(
+                first_byte & FIRST_BYTE::IMMEDIATE_OR_REGISTER_MODE_REG_MASK.bits(),
+            )
+            .expect("expected bits but there were none.");
+            return match res {
+                IMMEDIATE_TO_REGISTER_REG_FIELD_MASK_RESULTS::BX_PLUS_SI => "bx + si",
+                IMMEDIATE_TO_REGISTER_REG_FIELD_MASK_RESULTS::BX_PLUS_DI => "bx + di",
+                IMMEDIATE_TO_REGISTER_REG_FIELD_MASK_RESULTS::BP_PLUS_SI => "bp + si",
+                IMMEDIATE_TO_REGISTER_REG_FIELD_MASK_RESULTS::BP_PLUS_DI => "bp + di",
+                IMMEDIATE_TO_REGISTER_REG_FIELD_MASK_RESULTS::SI => "si",
+                IMMEDIATE_TO_REGISTER_REG_FIELD_MASK_RESULTS::DI => "di",
+                IMMEDIATE_TO_REGISTER_REG_FIELD_MASK_RESULTS::BP_OR_NONE => {
                     if instruction.operation == Operation::MEMORY_MODE_DIRECT {
                         return "bp";
                     } else {
                         return "";
                     }
                 }
-                0b00_000_111 => "bx",
+                IMMEDIATE_TO_REGISTER_REG_FIELD_MASK_RESULTS::BX => "bx",
                 _ => panic!("unknown instruction detected"),
             };
         }
