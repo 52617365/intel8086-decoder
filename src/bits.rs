@@ -61,9 +61,6 @@ bitflags! {
     pub struct OPERATIONS: u8 {
         const IMMEDIATE_TO_REGISTER_MASK = 0b_11111000;
     }
-    // 0b_00_10_1000
-    // 0b_11_11_1000 - Mask
-    // 0b_00_10_1000
 
     pub struct FIRST_BYTE: u8 {
         const IMMEDIATE_OR_REGISTER_MODE_REG_MASK = 0b_00_000_111;
