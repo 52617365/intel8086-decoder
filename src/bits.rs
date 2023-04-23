@@ -24,6 +24,8 @@ bitflags! {
 
     #[derive(PartialEq, Eq)]
     pub struct MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS: u8{
+       // TODO: there is some other alternative we have to add here. Figure out what it is.
+       // used on the first byte.
        const MOV = 0b_10001000;
        const ADD = 0b_00000000;
        const SUB = 0b_00101000;

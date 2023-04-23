@@ -145,10 +145,10 @@ fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
 
     return match mod_results {
         MOD_MODE_RESULTS::REGISTER_MODE => {
-            let mask_res = MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::from_bits(
-                first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK.bits(),
-            )
-            .expect("expected bits but got none");
+            // TODO: there is some other alternative we have to add here. Figure out what it is.
+            let mask_res =
+                first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK.bits();
+            let mask_res = MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::from_bits(mask_res).expect(&format!("first byte: {:08b}, second byte: {:08b}, result of & was: {:08b}, could not cast to type MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK.", first_byte, second_byte, mask_res));
 
             let mnemonic = match mask_res {
                 MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::MOV => "mov",
@@ -164,11 +164,12 @@ fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
                     != 0,
             }
         }
-        MOD_MODE_RESULTS::MEMORY_MODE_8 => {
-            let mask_res = MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::from_bits(
-                first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK.bits(),
-            )
-            .expect("expected bits but got none");
+        MOD_MODE_RESULTS::MEMORY_MODE_8
+        | MOD_MODE_RESULTS::MEMORY_MODE_16
+        | MOD_MODE_RESULTS::MEMORY_MODE => {
+            let mask_res =
+                first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK.bits();
+            let mask_res = MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::from_bits(mask_res).expect(&format!("first byte: {:08b}, second byte: {:08b}, result of & was: {:08b}, could not cast to type MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK.", first_byte, second_byte, mask_res));
 
             let mnemonic = match mask_res {
                 MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::MOV => "mov",
@@ -177,64 +178,43 @@ fn get_instruction(first_byte: u8, second_byte: u8) -> Instruction {
                 MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::CMP => "cmp",
                 _ => panic!("unsupported mnemonic: {:08b}", mask_res),
             };
-            Instruction {
-                operation: Operation::MEMORY_MODE_8,
-                mnemonic: mnemonic,
-                is_word_size: first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
-                    != 0,
-            }
-        }
-        MOD_MODE_RESULTS::MEMORY_MODE_16 => {
-            let mask_res = MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::from_bits(
-                first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK.bits(),
-            )
-            .expect("expected bits but got none");
 
-            let mnemonic = match mask_res {
-                MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::MOV => "mov",
-                MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::ADD => "add",
-                MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::SUB => "sub",
-                MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::CMP => "cmp",
-                _ => panic!("unsupported mnemonic: {:08b}", mask_res),
-            };
-            Instruction {
-                operation: Operation::MEMORY_MODE_16,
-                mnemonic: mnemonic,
-                is_word_size: first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
-                    != 0,
-            }
-        }
-        MOD_MODE_RESULTS::MEMORY_MODE => {
-            let mask_res = MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::from_bits(
-                first_byte & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK.bits(),
-            )
-            .expect("expected bits but got none");
-
-            let mnemonic = match mask_res {
-                MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::MOV => "mov",
-                MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::ADD => "add",
-                MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::SUB => "sub",
-                MEMORY_TO_REGISTER_VICA_VERCA_MNEMONIC_MASK_RESULTS::CMP => "cmp",
-                _ => panic!("unsupported mnemonic: {:08b}", mask_res),
-            };
-            // we are masking the R/M bits here because (MOD = 00 + R/M 110) = 16 bit displacement.
-            let res = second_byte & SECOND_BYTE::RM_MASK.bits();
-            if res == 0b_00_000_110 {
-                Instruction {
-                    operation: Operation::MEMORY_MODE_DIRECT,
+            if let MOD_MODE_RESULTS::MEMORY_MODE_8 = mod_results {
+                return Instruction {
+                    operation: Operation::MEMORY_MODE_8,
                     mnemonic: mnemonic,
                     is_word_size: first_byte
                         & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
                         != 0,
+                };
+            } else if let MOD_MODE_RESULTS::MEMORY_MODE = mod_results {
+                // we are masking the R/M bits here because (MOD = 00 + R/M 110) = 16 bit displacement.
+                let rm_mask_res = second_byte & SECOND_BYTE::RM_MASK.bits();
+                if rm_mask_res == 0b_00_000_110 {
+                    Instruction {
+                        operation: Operation::MEMORY_MODE_DIRECT,
+                        mnemonic: mnemonic,
+                        is_word_size: first_byte
+                            & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                            != 0,
+                    }
+                } else {
+                    Instruction {
+                        operation: Operation::MEMORY_MODE_NONE,
+                        mnemonic: mnemonic,
+                        is_word_size: first_byte
+                            & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
+                            != 0,
+                    }
                 }
             } else {
-                Instruction {
-                    operation: Operation::MEMORY_MODE_NONE,
+                return Instruction {
+                    operation: Operation::MEMORY_MODE_16,
                     mnemonic: mnemonic,
                     is_word_size: first_byte
                         & FIRST_BYTE::MEMORY_TO_REGISTER_VICA_VERCA_W_MASK.bits()
                         != 0,
-                }
+                };
             }
         }
         _ => panic!("Unknown operation - get_operation line: {}", line!()),
@@ -439,7 +419,6 @@ fn main() {
         if disp == Some(0) {
             disp = None;
         }
-
         let reg_is_dest = reg_is_dest(first_byte);
         // When dealing immediate to register instructions, reg is always on the lefthand side so we don't have to check for it.
         // We are also unwrapping disp because we have covered the cases on the previous branch and are sure that it contains a value.
@@ -655,7 +634,6 @@ mod tests {
                 expected_mnemonic: "mov",
             },
             get_instruction_params {
-                // TODO: there is a problem with this and immediate values.
                 first_byte: 0b_0000_00_00,
                 second_byte: 0b_11_001_010,
                 expected_op: Operation::REGISTER_MODE,
@@ -698,7 +676,6 @@ mod tests {
                 expected_mnemonic: "add",
             },
             get_instruction_params {
-                // TODO
                 first_byte: 0b_00_000_000,
                 second_byte: 0b_11_111_111,
                 expected_op: Operation::REGISTER_MODE,
