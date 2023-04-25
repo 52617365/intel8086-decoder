@@ -104,9 +104,30 @@ fn determine_operation(first_byte: u8, second_byte: u8) -> Instruction {
 
 fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -> &'static str {
     let rm_res = second_byte & MASKS::RM.bits();
+    let reg_res = second_byte & MASKS::REG.bits();
     let is_word_size = is_word_size(first_byte, op);
 
     if get_reg {
+        match (reg_res, is_word_size) {
+            (0b_00_000_000, true) => "ax",
+            (0b_00_001_000, true) => "cx",
+            (0b_00_010_000, true) => "dx",
+            (0b_00_011_000, true) => "bx",
+            (0b_00_100_000, true) => "sp",
+            (0b_00_101_000, true) => "bp",
+            (0b_00_110_000, true) => "si",
+            (0b_00_111_000, true) => "di",
+            //
+            (0b_00_000_000, false) => "al",
+            (0b_00_001_000, false) => "cl",
+            (0b_00_010_000, false) => "dl",
+            (0b_00_011_000, false) => "bl",
+            (0b_00_100_000, false) => "ah",
+            (0b_00_101_000, false) => "ch",
+            (0b_00_110_000, false) => "dh",
+            (0b_00_111_000, false) => "bh",
+            _ => panic!("unknown register - get_register - get_reg branch\nreg was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", reg_res, first_byte, second_byte),
+        }
     } else {
         if op == Operation::REGISTER_MODE {
             // 11
@@ -128,6 +149,7 @@ fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -
                 (0b_00_000_101, false) => "ch",
                 (0b_00_000_110, false) => "dh",
                 (0b_00_000_111, false) => "bh",
+                _ => panic!("unknown register - get_register - Operation::REGISTER_MODE\nreg was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", reg_res, first_byte, second_byte),
             }
         } else if op == Operation::MEMORY_MODE_NONE {
             // 10/01/00
@@ -141,6 +163,7 @@ fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -
                 0b_00_000_110 => panic!(
                     "This: {:08b} should never be hit because it's handled by the direct memory operation.", rm_res),
                 0b_00_000_111 => "bx",
+                _ => panic!("unknown register - get_register - Operation::MEMORY_MODE_NONE\n R/M was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", rm_res, first_byte, second_byte),
             }
         } else if op == Operation::MEMORY_MODE_8_BIT_DISPLACEMENT {
             match rm_res {
@@ -153,6 +176,9 @@ fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -
                 0b_00_000_101 => "di + D8",
                 0b_00_000_110 => "bp + D8",
                 0b_00_000_111 => "bx + D8",
+                _ => panic!(
+                    "unknown register - get_register - Operation::MEMORY_MODE_8_BIT_DISPLACEMENT\n R/M was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", rm_res, first_byte, second_byte
+                ),
             }
         } else if op == Operation::MEMORY_MODE_16_BIT_DISPLACEMENT {
             match rm_res {
@@ -165,6 +191,9 @@ fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -
                 0b_00_000_101 => "di + D16",
                 0b_00_000_110 => "bp + D16",
                 0b_00_000_111 => "bx + D16",
+                _ => panic!(
+                    "unknown register - get_register - Operation::MEMORY_MODE_16_BIT_DISPLACEMENT\n R/M was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", rm_res, first_byte, second_byte
+                ),
             }
         } else if op == Operation::MEMORY_MODE_DIRECT {
             // 00 + 110 RM
