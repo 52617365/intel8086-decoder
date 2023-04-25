@@ -51,14 +51,22 @@ fn is_immediate_to_memory_or_register(first_byte: u8) -> bool {
         || mask_res == IMMEDIATE_TO_MEMORY_OR_REGISTER::SUB_OR_CMP_OR_ADD.bits();
 }
 
+fn is_memory_mode_direct(operation: Operation, second_byte: u8) -> bool {
+    let rm_res = second_byte & MASKS::RM.bits();
+    // When mod == 00 and RM == 110 then memory mode is direct with 16-bit displacement.
+    if operation == Operation::MEMORY_MODE_NONE && rm_res == 0b_00_000_110 {
+        return true;
+    }
+    return false;
+}
+
 // determines the operation and then fetches the mnemonic used (E.g. add, mov etc.)
 fn determine_operation(first_byte: u8, second_byte: u8) -> Instruction {
     let mod_res = second_byte & MASKS::MOD.bits();
-    let rm_res = second_byte & MASKS::RM.bits();
     let mut operation = MOD_RESULTS::convert_to_operation(mod_res);
 
     // When mod == 00 and RM == 110 then memory mode is direct with 16-bit displacement.
-    if operation == Operation::MEMORY_MODE_NONE && rm_res == 0b_00_000_110 {
+    if is_memory_mode_direct(operation, second_byte) {
         operation = Operation::MEMORY_MODE_DIRECT;
     }
 
