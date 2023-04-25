@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn test_determine_operation() {
         type D = determine_operation_params;
-        let params: [D; 5] = [
+        let params: [D; 6] = [
             D {
                 first_byte: 0b_10000000,
                 second_byte: 0b_11_000_000,
@@ -310,6 +310,12 @@ mod tests {
                 first_byte: 0b_10000000,
                 second_byte: 0b_01_101_000,
                 expected_op: Operation::MEMORY_MODE_8_BIT_DISPLACEMENT,
+                expected_mnemonic: "sub",
+            },
+            D {
+                first_byte: 0b_10000000,
+                second_byte: 0b_10_101_000,
+                expected_op: Operation::MEMORY_MODE_16_BIT_DISPLACEMENT,
                 expected_mnemonic: "sub",
             },
         ];
