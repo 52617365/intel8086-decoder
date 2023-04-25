@@ -53,7 +53,7 @@ fn is_immediate_to_memory_or_register(first_byte: u8) -> bool {
 
 fn is_memory_mode_direct(operation: Operation, second_byte: u8) -> bool {
     let rm_res = second_byte & MASKS::RM.bits();
-    // When mod == 00 and RM == 110 then memory mode is direct with 16-bit displacement.
+    // When mod == 00 (memory mode, no displacement) and RM == 110 then memory mode is direct with 16-bit displacement.
     if operation == Operation::MEMORY_MODE_NONE && rm_res == 0b_00_000_110 {
         return true;
     }
@@ -102,15 +102,77 @@ fn determine_operation(first_byte: u8, second_byte: u8) -> Instruction {
     }
 }
 
-// fn get_register(get_reg: bool, ) -> {
+fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -> &'static str {
+    let rm_res = second_byte & MASKS::RM.bits();
+    let is_word_size = is_word_size(first_byte, op);
 
-// }
-struct get_register_params {
-    first_byte: u8,
-    second_byte: u8,
-    get_reg_register: bool, // true if reg, false if r/m
-    op: MOD_RESULTS,
-    rm: u8,
+    if get_reg {
+    } else {
+        if op == Operation::REGISTER_MODE {
+            // 11
+            match (rm_res, is_word_size) {
+                (0b_00_000_000, true) => "ax",
+                (0b_00_000_001, true) => "cx",
+                (0b_00_000_010, true) => "dx",
+                (0b_00_000_011, true) => "bx",
+                (0b_00_000_100, true) => "sp",
+                (0b_00_000_101, true) => "bp",
+                (0b_00_000_110, true) => "si",
+                (0b_00_000_111, true) => "di",
+                //
+                (0b_00_000_000, false) => "al",
+                (0b_00_000_001, false) => "cl",
+                (0b_00_000_010, false) => "dl",
+                (0b_00_000_011, false) => "bl",
+                (0b_00_000_100, false) => "ah",
+                (0b_00_000_101, false) => "ch",
+                (0b_00_000_110, false) => "dh",
+                (0b_00_000_111, false) => "bh",
+            }
+        } else if op == Operation::MEMORY_MODE_NONE {
+            // 10/01/00
+            match rm_res {
+                0b_00_000_000 => "bx + si",
+                0b_00_000_001 => "bx + di",
+                0b_00_000_010 => "bp + si",
+                0b_00_000_011 => "bp + di",
+                0b_00_000_100 => "si",
+                0b_00_000_101 => "di",
+                0b_00_000_110 => panic!(
+                    "This: {:08b} should never be hit because it's handled by the direct memory operation.", rm_res),
+                0b_00_000_111 => "bx",
+            }
+        } else if op == Operation::MEMORY_MODE_8_BIT_DISPLACEMENT {
+            match rm_res {
+                // D8 stand for 8-bit displacement. We will be search & replacing the D8 string with the 8-bit displacement.
+                0b_00_000_000 => "bx + si + D8",
+                0b_00_000_001 => "bx + di + D8",
+                0b_00_000_010 => "bp + si + D8",
+                0b_00_000_011 => "bp + di + D8",
+                0b_00_000_100 => "si + D8",
+                0b_00_000_101 => "di + D8",
+                0b_00_000_110 => "bp + D8",
+                0b_00_000_111 => "bx + D8",
+            }
+        } else if op == Operation::MEMORY_MODE_16_BIT_DISPLACEMENT {
+            match rm_res {
+                // D8 stand for 8-bit displacement. We will be search & replacing the D8 string with the 8-bit displacement.
+                0b_00_000_000 => "bx + si + D16",
+                0b_00_000_001 => "bx + di + D16",
+                0b_00_000_010 => "bp + si + D16",
+                0b_00_000_011 => "bp + di + D16",
+                0b_00_000_100 => "si + D16",
+                0b_00_000_101 => "di + D16",
+                0b_00_000_110 => "bp + D16",
+                0b_00_000_111 => "bx + D16",
+            }
+        } else if op == Operation::MEMORY_MODE_DIRECT {
+            // 00 + 110 RM
+            "" // we return an empty string because MEMORY_MODE_DIRECT does not have a register, instead it's a direct 16-bit address that will be fetched later.
+        } else {
+            panic!("Unsupported operation - get_register")
+        }
+    }
 }
 // fn get_register(params: get_register_params) -> &'static str {
 
