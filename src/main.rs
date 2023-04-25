@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn test_determine_operation() {
         type D = determine_operation_params;
-        let params: [D; 4] = [
+        let params: [D; 5] = [
             D {
                 first_byte: 0b_10000000,
                 second_byte: 0b_11_000_000,
@@ -301,11 +301,16 @@ mod tests {
                 expected_mnemonic: "cmp",
             },
             D {
-                // TODO: add memory mode direct.
                 first_byte: 0b_10000000,
                 second_byte: 0b_00_111_110,
                 expected_op: Operation::MEMORY_MODE_DIRECT,
                 expected_mnemonic: "cmp",
+            },
+            D {
+                first_byte: 0b_10000000,
+                second_byte: 0b_01_101_000,
+                expected_op: Operation::MEMORY_MODE_8_BIT_DISPLACEMENT,
+                expected_mnemonic: "sub",
             },
         ];
 
