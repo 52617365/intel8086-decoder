@@ -417,4 +417,66 @@ mod tests {
             assert_eq!(param.expected_mnemonic, op.mnemonic);
         }
     }
+
+    struct get_register {
+        get_reg: bool,
+        op: Operation,
+        first_byte: u8,
+        second_byte: u8,
+        expected_register: &'static str,
+    }
+    #[test]
+    fn test_get_register() {
+        type D = get_register;
+        let params: [D; 6] = [
+            D {
+                get_reg: false,
+                op: Operation::REGISTER_MODE,
+                first_byte: 0b_00_000_001,
+                second_byte: 0b_00_000_000,
+                expected_register: "ax",
+            },
+            D {
+                get_reg: false,
+                op: Operation::MEMORY_MODE_NONE,
+                first_byte: 0b_00_000_000,
+                second_byte: 0b_00_000_001,
+                expected_register: "bx + di",
+            },
+            D {
+                get_reg: false,
+                op: Operation::MEMORY_MODE_8_BIT_DISPLACEMENT,
+                first_byte: 0b_00_000_000,
+                second_byte: 0b_00_000_110,
+                expected_register: "bp + D8",
+            },
+            D {
+                get_reg: false,
+                op: Operation::MEMORY_MODE_16_BIT_DISPLACEMENT,
+                first_byte: 0b_00_000_000,
+                second_byte: 0b_00_000_110,
+                expected_register: "bp + D16",
+            },
+            D {
+                get_reg: true,
+                op: Operation::MEMORY_MODE_16_BIT_DISPLACEMENT,
+                first_byte: 0b_00_000_000,
+                second_byte: 0b_00_000_000,
+                expected_register: "al",
+            },
+            D {
+                get_reg: false,
+                op: Operation::MEMORY_MODE_DIRECT,
+                first_byte: 0b_00_000_000,
+                second_byte: 0b_00_000_000,
+                expected_register: "",
+            },
+        ];
+        for param in params {
+            assert_eq!(
+                get_register(param.get_reg, param.op, param.first_byte, param.second_byte),
+                param.expected_register
+            )
+        }
+    }
 }
