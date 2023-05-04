@@ -116,6 +116,12 @@ fn determine_operation(first_byte: u8, second_byte: u8) -> Instruction {
     }
 }
 
+// TODO: handle
+//  IMMEDIATE_TO_MEMORY_8,
+//  IMMEDIATE_TO_MEMORY_16,
+//  IMMEDIATE_TO_REGISTER_8,
+//  IMMEDIATE_TO_REGISTER_16,
+
 fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -> &'static str {
     let rm_res = second_byte & MASKS::RM.bits();
     let reg_res = second_byte & MASKS::REG.bits();
@@ -143,7 +149,10 @@ fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -
             _ => panic!("unknown register - get_register - get_reg branch\nreg was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", reg_res, first_byte, second_byte),
         }
     } else {
-        if op == Operation::REGISTER_MODE {
+        if op == Operation::REGISTER_MODE
+            || op == Operation::IMMEDIATE_TO_REGISTER_8
+            || op == Operation::IMMEDIATE_TO_REGISTER_16
+        {
             // 11
             match (rm_res, is_word_size) {
                 (0b_00_000_000, true) => "ax",
@@ -179,37 +188,23 @@ fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -
                 0b_00_000_111 => "bx",
                 _ => panic!("unknown register - get_register - Operation::MEMORY_MODE_NONE\n R/M was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", rm_res, first_byte, second_byte),
             }
-        } else if op == Operation::MEMORY_MODE_8_BIT_DISPLACEMENT {
+        } else if op == Operation::MEMORY_MODE_8_BIT_DISPLACEMENT
+            || op == Operation::MEMORY_MODE_16_BIT_DISPLACEMENT
+            || op == Operation::IMMEDIATE_TO_MEMORY_8
+            || op == Operation::IMMEDIATE_TO_MEMORY_16
+        {
             match rm_res {
-                // D8 stand for 8-bit diacement. We will be search & replacing the D8 string with the 8-bit displacement.
-                0b_00_000_000 => "bx + si + ", // d8 gets added on all of these
-                0b_00_000_001 => "bx + di + ",
-                0b_00_000_010 => "bp + si + ",
-                0b_00_000_011 => "bp + di + ",
-                0b_00_000_100 => "si + ",
-                0b_00_000_101 => "di + ",
-                0b_00_000_110 => "bp + ",
-                0b_00_000_111 => "bx + ",
+                // we get the register from the r/m field.
+                0b_00_000_000 => "bx + si", // 8-bit displacement gets added on all of these
+                0b_00_000_001 => "bx + di",
+                0b_00_000_010 => "bp + si",
+                0b_00_000_011 => "bp + di",
+                0b_00_000_100 => "si",
+                0b_00_000_101 => "di",
+                0b_00_000_110 => "bp",
+                0b_00_000_111 => "bx",
                 _ => panic!(
-                    "unknown register - get_register - Operation::MEMORY_MODE_8_BIT_DISPLACEMENT\n R/M was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", rm_res, first_byte, second_byte
-                ),
-            }
-        }
-        // else if op == Operation::IMMEDIATE_TO_REGISTER_16 {
-        // }
-        else if op == Operation::MEMORY_MODE_16_BIT_DISPLACEMENT {
-            match rm_res {
-                // D8 stand for 8-bit displacement. We will be search & replacing the D8 string with the 8-bit displacement.
-                0b_00_000_000 => "bx + si + ", // d16 gets added into all of these instructions.
-                0b_00_000_001 => "bx + di + ",
-                0b_00_000_010 => "bp + si + ",
-                0b_00_000_011 => "bp + di + ",
-                0b_00_000_100 => "si + ",
-                0b_00_000_101 => "di + ",
-                0b_00_000_110 => "bp + ",
-                0b_00_000_111 => "bx + ",
-                _ => panic!(
-                    "unknown register - get_register - Operation::MEMORY_MODE_16_BIT_DISPLACEMENT\n R/M was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", rm_res, first_byte, second_byte
+                    "unknown register - get_register - Operation::MEMORY_MODE_8_BIT_DISPLACEMENT || Operation::MEMORY_MODE_16_BIT_DISPLACEMENT\n R/M was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", rm_res, first_byte, second_byte
                 ),
             }
         } else if op == Operation::MEMORY_MODE_DIRECT {
@@ -364,14 +359,14 @@ mod tests {
                 op: Operation::MEMORY_MODE_8_BIT_DISPLACEMENT,
                 first_byte: 0b_00_000_000,
                 second_byte: 0b_00_000_110,
-                expected_register: "bp + ",
+                expected_register: "bp",
             },
             D {
                 get_reg: false,
                 op: Operation::MEMORY_MODE_16_BIT_DISPLACEMENT,
                 first_byte: 0b_00_000_000,
                 second_byte: 0b_00_000_110,
-                expected_register: "bp + ",
+                expected_register: "bp",
             },
             D {
                 get_reg: true,
