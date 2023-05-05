@@ -4,6 +4,12 @@ use bits::*;
 
 use core::panic;
 use std::{env, fs};
+use crate::bits::MemoryMode::MemoryModeNoDisplacement;
+
+
+// FIXME: The third instruction in the listing_0041 is not being decoded correctly.
+// it's add si, 2 and the si register gets decoded as bp and the immediate 2 gets decoded as 49416.
+// some other instructions seem to get decoded incorrectly, look into this later.
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
 fn is_word_size(first_byte: u8, inst_type: InstructionType) -> bool {
@@ -45,7 +51,6 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryMode, f
     } else {
         if memory_mode == MemoryMode::DirectMemoryOperation
             || inst == InstructionType::ImmediateToRegisterMemory
-            || inst == InstructionType::RegisterMemory
         {
             // 11
             return match (rm_res, is_word_size) {
@@ -68,7 +73,7 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryMode, f
                 (0b_00_000_111, false) => "bh",
                 _ => panic!("unknown register - get_register - Operation::REGISTER_MODE\nreg was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", reg_res, first_byte, second_byte),
             };
-        } else if memory_mode == MemoryMode::MemoryModeNoDisplacement {
+        } else if memory_mode == MemoryModeNoDisplacement {
             // 10/01/00
             return match rm_res {
                 0b_00_000_000 => "bx + si",
@@ -117,7 +122,7 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryMode, f
 
 // sig stand for significant
 fn combine_bytes(most_sig_byte: u8, least_sig_byte: u8) -> u16 {
-    let combined_bytes: u16 = ((most_sig_byte as u16) << 8) | (least_sig_byte as u16);
+    let combined_bytes: u16 = ((most_sig_byte as u16) << 8)| (least_sig_byte as u16);
     return combined_bytes;
 }
 
@@ -128,6 +133,7 @@ fn main() {
     let op_codes = construct_opcodes();
 
     let mut i: usize = 0;
+    let mut instruction_count: usize = 1;
     while i < binary_contents.len() {
         let first_byte = binary_contents[i];
         let second_byte = binary_contents[i + 1];
@@ -135,15 +141,60 @@ fn main() {
 
         let memory_mode = determine_memory_mode(second_byte);
         let instruction = determine_instruction(&op_codes, first_byte);
+        let is_word_size = is_word_size(first_byte, instruction);
 
-        let reg_register = get_register(true, instruction, memory_mode, first_byte, second_byte);
-        let rm_register = get_register(false, instruction, memory_mode, first_byte, second_byte);
+        let mut reg_or_immediate = String::new();
+        let mut rm_or_immediate = String::new();
 
-        println!(
-            "reg_register: {}, rm_register: {}, operation: {:?}, memory mode: {:?}",
-            reg_register, rm_register, instruction, memory_mode
-        );
+        // We are doing this if statement because in the case of an ImmediateToRegisterMemory (NON MOV one)
+        // we actually do not have a REG register. the immediate value is always moved into the R/M register.
+        if instruction == InstructionType::ImmediateToRegisterMemory {
+            if is_word_size {
+                // the fifth and sixth byte contain the immediate value because w is set to 1 (word size), we combine these two bytes and then cast it to a decimal.
+                let fifth_byte = binary_contents[i + 4];
+                let sixth_byte = binary_contents[i + 5];
+                let combined = combine_bytes(fifth_byte, sixth_byte);
+                reg_or_immediate = (combined as usize).to_string();
+            } else {
+                let fifth_byte = binary_contents[i + 4];
+                reg_or_immediate = (fifth_byte as usize).to_string();
+            }
+        } else {
+            // In this case its actually not an immediate, instead the string gets populated with the reg register.
+            reg_or_immediate = get_register(true, instruction, memory_mode, first_byte, second_byte).parse().unwrap();
+        }
 
-        i += 2
+        // This case is actually the complete opposite from the previous one.
+        // The immediate to register MOV instruction actually does not have the R/M register
+        // but has the REG register it used to move immediate values to.
+        if instruction == InstructionType::ImmediateToRegisterMOV {
+            // and the R/M Register actually is not used at all with the MOV immediate instruction.
+
+            // With the immediate to register mov instruction, the immediate is stored in the second (and third byte if word sized).
+            if is_word_size {
+                let third_byte = binary_contents[i + 4];
+                let combined = combine_bytes(third_byte, second_byte);
+                reg_or_immediate = (combined as usize).to_string();
+            } else {
+                reg_or_immediate = (second_byte as usize).to_string();
+            }
+        } else {
+            // In this case its actually not an immediate, instead the string gets populated with the R/M register.
+            rm_or_immediate = get_register(false, instruction, memory_mode, first_byte, second_byte).parse().unwrap();
+        }
+
+        if instruction == InstructionType::ImmediateToRegisterMemory {
+            i += 6;
+            println!("Immediate value: {}, R/M Register: {}, operation: {:?}, memory_mode: {:?}, instruction: {}, first_byte: {:08b}, second_byte: {:08b}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte);
+        } else if instruction == InstructionType::ImmediateToRegisterMOV {
+            i += 3;
+            println!("Immediate value: {}, REG Register: {}, operation: {:?}, memory_mode: {:?}, instruction: {}, first_byte: {:08b}, second_byte: {:08b}", rm_or_immediate, reg_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte);
+        } else {
+            i += 4;
+            println!(
+                "reg_register: {}, rm_register: {}, operation: {:?}, memory mode: {:?}, instruction: {}, first_byte: {:08b}, second_byte: {:08b}",
+                reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte
+            );
+        }
     }
 }
