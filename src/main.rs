@@ -20,28 +20,15 @@ fn is_word_size(first_byte: u8, inst_type: InstructionType) -> bool {
     }
 }
 
-// checks to see if the operation used is immediate_to_memory_or_register
-// TODO: even with the current solution Im trying, I stil have to handle the
-// direct memory operation because it cant be determined from the first byte.
-fn is_memory_mode_direct(operation: Operation, second_byte: u8) -> bool {
+fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryMode, first_byte: u8, second_byte: u8) -> &'static str {
     let rm_res = second_byte & Masks::RM_BITS as u8;
-    // When mod == 00 (memory mode, no displacement) and RM == 110 then memory mode is direct with 16-bit displacement.
-    if operation == Operation::MEMORY_MODE_NONE && rm_res == 0b_00_000_110 {
-        return true;
-    }
-    return false;
-}
-
-fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -> &'static str {
-    let rm_res = second_byte & MASKS::RM.bits();
-    let reg_res = second_byte & MASKS::REG.bits();
-    let is_word_size = is_word_size(first_byte, op);
+    let reg_res = second_byte & Masks::REG_BITS as u8;
+    let is_word_size = is_word_size(first_byte, inst);
 
     if get_reg
-        || op == Operation::IMMEDIATE_TO_REGISTER_MOV_8
-        || op == Operation::IMMEDIATE_TO_REGISTER_MOV_16
+        || inst == InstructionType::ImmediateToRegisterMOV
     {
-        return match (reg_res, is_word_size) {
+            return match (reg_res, is_word_size) {
             (0b_00_000_000, true) => "ax",
             (0b_00_001_000, true) => "cx",
             (0b_00_010_000, true) => "dx",
@@ -62,9 +49,9 @@ fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -
             _ => panic!("unknown register - get_register - get_reg branch\nreg was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", reg_res, first_byte, second_byte),
         };
     } else {
-        if op == Operation::REGISTER_MODE
-            || op == Operation::IMMEDIATE_TO_REGISTER_8
-            || op == Operation::IMMEDIATE_TO_REGISTER_16
+        if memory_mode == MemoryMode::DirectMemoryOperation
+            || inst == InstructionType::ImmediateToRegisterMemory
+            || inst == InstructionType::RegisterMemory
         {
             // 11
             return match (rm_res, is_word_size) {
@@ -87,7 +74,7 @@ fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -
                 (0b_00_000_111, false) => "bh",
                 _ => panic!("unknown register - get_register - Operation::REGISTER_MODE\nreg was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", reg_res, first_byte, second_byte),
             };
-        } else if op == Operation::MEMORY_MODE_NONE {
+        } else if memory_mode == MemoryMode::MemoryModeNoDisplacement {
             // 10/01/00
             return match rm_res {
                 0b_00_000_000 => "bx + si",
@@ -101,14 +88,19 @@ fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -
                 0b_00_000_111 => "bx",
                 _ => panic!("unknown register - get_register - Operation::MEMORY_MODE_NONE\n R/M was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", rm_res, first_byte, second_byte),
             };
-        } else if op == Operation::MEMORY_MODE_8_BIT_DISPLACEMENT
-            || op == Operation::MEMORY_MODE_16_BIT_DISPLACEMENT
-            || op == Operation::IMMEDIATE_TO_MEMORY_8
-            || op == Operation::IMMEDIATE_TO_MEMORY_16
+        } else if memory_mode == MemoryMode::MemoryMode8Bit ||
+           memory_mode == MemoryMode::MemoryMode16Bit
         {
             return match rm_res {
+                // NOTE:
+                // When calling this function, we then check what the memory_mode was
+                // to see what the displacement should be.
+                // It will be either none, 8-bits or 16-bits depending on the result.
+                // Here it will be either 8 or 16-bits.
+                // the displacement is then added after the registers.
+
                 // we get the register from the r/m field.
-                0b_00_000_000 => "bx + si", // 8-bit displacement gets added on all of these
+                0b_00_000_000 => "bx + si",
                 0b_00_000_001 => "bx + di",
                 0b_00_000_010 => "bp + si",
                 0b_00_000_011 => "bp + di",
@@ -117,14 +109,14 @@ fn get_register(get_reg: bool, op: Operation, first_byte: u8, second_byte: u8) -
                 0b_00_000_110 => "bp",
                 0b_00_000_111 => "bx",
                 _ => panic!(
-                    "unknown register - get_register - Operation::MEMORY_MODE_8_BIT_DISPLACEMENT || Operation::MEMORY_MODE_16_BIT_DISPLACEMENT\n R/M was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", rm_res, first_byte, second_byte
+                    "unknown register - get_register - R/M was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", rm_res, first_byte, second_byte
                 ),
             };
-        } else if op == Operation::MEMORY_MODE_DIRECT {
+        } else if memory_mode == MemoryMode::DirectMemoryOperation {
             // 00 + 110 RM
             "" // we return an empty string because MEMORY_MODE_DIRECT does not have a register, instead it's a direct 16-bit address that will be fetched later.
         } else {
-            panic!("Unsupported operation - get_register {:?}", op)
+            panic!("Unsupported operation - get_register {:?}, first_byte: {:8b}, second_byte: {:8b}", inst, first_byte, second_byte)
         }
     }
 }
