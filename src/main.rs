@@ -1,7 +1,6 @@
 mod bits;
 mod operation;
 use bits::*;
-use operation::*;
 
 use core::panic;
 use std::{env, fs};
