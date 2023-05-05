@@ -23,14 +23,16 @@ pub enum InstructionType {
     ImmediateToRegisterMOV,
 }
 
+
 // OpCode exists because we want each bit to know which InstructionType it belongs to.
 // this is because we will be iterating and matching the bit patterns and if we match we want to
 // immediately know which instruction type it is.
 
-// Contains all the possible bit patterns for the first bytes of MOV, CMP and ADD register/to/from/memory operations.
-const REGISTER_MEMORY_OPERATION: [u8; 12] = [
+// Contains all the possible bit patterns for the first bytes of MOV, CMP, SUB and ADD register/to/from/memory operations.
+const REGISTER_MEMORY_OPERATION: [u8; 20] = [
     0b10001011, 0b10001001, 0b10001010, 0b10001000, 0b00111000, 0b00111001, 0b00111010, 0b00111011,
-    0b00101000, 0b00101001, 0b00101010, 0b00101011,
+    0b00101000, 0b00101001, 0b00101010, 0b00101011, 0b00101000, 0b00101001, 0b00101010, 0b00101011,
+    0b00000000, 0b00000001, 0b00000010, 0b00000011
 ];
 
 // Contains all the possible ImmediateToRegisterOrMemory patterns from the first byte for MOV, ADD, CMP, SUB.
@@ -99,7 +101,7 @@ pub fn determine_instruction(op_codes: &Vec<OpCode>, first_byte: u8) -> Instruct
             return op_code.t.clone();
         }
     }
-    panic!("unsupported operation {}", first_byte);
+    panic!("unsupported operation, first_byte: {:08b}", first_byte);
 }
 
 
@@ -113,10 +115,10 @@ pub fn determine_instruction(op_codes: &Vec<OpCode>, first_byte: u8) -> Instruct
 // the direct memory is a 16 bit address.
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum MemoryMode {
-    MemoryModeNoDisplacement = 0b_00000000,
-    MemoryMode8Bit = 0b_01000000,
-    MemoryMode16Bit = 0b_10000000,
-    RegisterMode = 0b_11000000,
+    MemoryModeNoDisplacement,
+    MemoryMode8Bit,
+    MemoryMode16Bit,
+    RegisterMode,
     DirectMemoryOperation,
 }
 #[repr(u8)]
@@ -129,6 +131,7 @@ pub enum Masks {
 }
 
 
+// TODO determine_memory_mode: We are currently not handling immediate value to register correctly. It gets represented as a MemoryMode16bit operation.
 pub fn determine_memory_mode(second_byte: u8) -> MemoryMode {
     match second_byte & MOD_BITS as u8 {
         0b_00000000 => {
