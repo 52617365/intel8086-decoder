@@ -12,8 +12,11 @@
 // I'm trying to follow a similar approach to Casey Muratori, where he first did a
 // Lexical analyzer type of phase to get tokens out of the bit patterns.
 
+use crate::bits::Masks::MOD_BITS;
+use crate::bits::MemoryMode::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
+
 // InstructionTable contains all the possible instructions that we are trying to decode.
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum InstructionType {
     RegisterMemory,
     ImmediateToRegisterMemory,
@@ -25,7 +28,7 @@ pub enum InstructionType {
 // immediately know which instruction type it is.
 
 // Contains all the possible bit patterns for the first bytes of MOV, CMP and ADD register/to/from/memory operations.
-const RegisterMemoryOperation: [u8; 12] = [
+const REGISTER_MEMORY_OPERATION: [u8; 12] = [
     0b10001011, 0b10001001, 0b10001010, 0b10001000, 0b00111000, 0b00111001, 0b00111010, 0b00111011,
     0b00101000, 0b00101001, 0b00101010, 0b00101011,
 ];
@@ -34,19 +37,19 @@ const RegisterMemoryOperation: [u8; 12] = [
 // the bit pattern is the same for ADD, SUB, CMP but different for MOV.
 // MOV = 110011{1/0}
 // ADD, SUB, CMP = 100000{0/1,0/1}
-const ImmediateToRegisterOrMemoryID: [u8; 7] = [
+const IMMEDIATE_TO_REGISTER_OR_MEMORY_ID: [u8; 7] = [
     0b11000111, 0b11000110, 0b10000000, 0b10000011, 0b10000001, 0b10000010, 0b10000000,
 ];
 
 // The mov immediate to register has a bit pattern of {1011{0/1,0/1,0/1,0/1}}
-const ImmediateToRegisterMovID: [u8; 16] = [
+const IMMEDIATE_TO_REGISTER_MOV_ID: [u8; 16] = [
     0b10110000, 0b10110001, 0b10110010, 0b10110011, 0b10110100, 0b10110101, 0b10110110, 0b10110111,
     0b10111000, 0b10111001, 0b10111010, 0b10111011, 0b10111100, 0b10111101, 0b10111110, 0b10111111,
 ];
 
 //
 
-struct OpCode {
+pub struct OpCode {
     bit_pattern: u8,
     t: InstructionType,
 }
@@ -57,12 +60,12 @@ struct OpCode {
 // this is done because we want to determine the operation by looping over all the bit_patterns and on a match
 // we will look at the InstructionType.
 pub fn construct_opcodes() -> Vec<OpCode> {
-    let elements_size: usize = RegisterMemoryOperation.len()
-        + ImmediateToRegisterOrMemoryID.len()
-        + ImmediateToRegisterMovID.len();
+    let elements_size: usize = REGISTER_MEMORY_OPERATION.len()
+        + IMMEDIATE_TO_REGISTER_OR_MEMORY_ID.len()
+        + IMMEDIATE_TO_REGISTER_MOV_ID.len();
     let mut op_codes: Vec<OpCode> = Vec::with_capacity(elements_size);
 
-    for reg_memory in RegisterMemoryOperation {
+    for reg_memory in REGISTER_MEMORY_OPERATION {
         let op_code = OpCode {
             bit_pattern: reg_memory,
             t: InstructionType::RegisterMemory,
@@ -70,7 +73,7 @@ pub fn construct_opcodes() -> Vec<OpCode> {
         op_codes.push(op_code)
     }
 
-    for imm_to_reg_or_memory in ImmediateToRegisterOrMemoryID {
+    for imm_to_reg_or_memory in IMMEDIATE_TO_REGISTER_OR_MEMORY_ID {
         let op_code = OpCode {
             bit_pattern: imm_to_reg_or_memory,
             t: InstructionType::ImmediateToRegisterMemory,
@@ -78,7 +81,7 @@ pub fn construct_opcodes() -> Vec<OpCode> {
         op_codes.push(op_code)
     }
 
-    for imm_to_reg_mov in ImmediateToRegisterMovID {
+    for imm_to_reg_mov in IMMEDIATE_TO_REGISTER_MOV_ID {
         let op_code = OpCode {
             bit_pattern: imm_to_reg_mov,
             t: InstructionType::ImmediateToRegisterMOV,
@@ -93,15 +96,54 @@ pub fn construct_opcodes() -> Vec<OpCode> {
 pub fn determine_instruction(op_codes: &Vec<OpCode>, first_byte: u8) -> InstructionType {
     for op_code in op_codes {
         if op_code.bit_pattern == first_byte {
-            return op_code.t;
+            return op_code.t.clone();
         }
     }
     panic!("unsupported operation {}", first_byte);
 }
 
+
+// MemoryMode is determined by the MOD field in the second byte.
+// 00 = Memory Mode, no displacement
+// 01 = Memory Mode, 8 bit displacement
+// 10 = Memory Mode, 16 bit displacement
+
+// 11 = Register Mode, no displacement, expect when R/M Field is 110.
+// when MOD is 11 and R/M is 110, it means its a direct memory mode operation
+// the direct memory is a 16 bit address.
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum MemoryMode {
+    MemoryModeNoDisplacement = 0b_00000000,
+    MemoryMode8Bit = 0b_01000000,
+    MemoryMode16Bit = 0b_10000000,
+    RegisterMode = 0b_11000000,
+    DirectMemoryOperation,
+}
 #[repr(u8)]
 pub enum Masks {
     IMMEDIATE_TO_REG_MOV_W_BIT = 0b_00001000,
+    MOD_BITS = 0b_11000000,
     W_BIT = 0b_00000001,
     RM_BITS = 0b_00000111,
+    REG_BITS = 0b_00111000,
+}
+
+
+pub fn determine_memory_mode(second_byte: u8) -> MemoryMode {
+    match second_byte & MOD_BITS as u8 {
+        0b_00000000 => {
+            // So the rm_res determines if the memory mode with no displacement is actually
+            // a 16-bit memory operation. Direct memory operation has R/M set to 110.
+            let rm_res = second_byte & Masks::RM_BITS as u8;
+            return if rm_res == 0b_00_000_110 {
+                DirectMemoryOperation
+            } else {
+                MemoryModeNoDisplacement
+            }
+        }
+        0b_01000000 => MemoryMode8Bit,
+        0b_10000000 => MemoryMode16Bit,
+        0b_11000000 => RegisterMode,
+        _ => panic!("Invalid second_byte bit pattern, could not determine memory mode: {}", second_byte),
+    }
 }
