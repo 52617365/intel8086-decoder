@@ -5,17 +5,12 @@ use bits::*;
 use core::panic;
 use std::{env, fs};
 
-struct Instruction {
-    op: Operation,
-    mnemonic: &'static str,
-}
-
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
 fn is_word_size(first_byte: u8, inst_type: InstructionType) -> bool {
-    if inst_type == InstructionType::ImmediateToRegisterMOV {
-        return first_byte & Masks::IMMEDIATE_TO_REG_MOV_W_BIT as u8 != 0;
+    return if inst_type == InstructionType::ImmediateToRegisterMOV {
+        first_byte & Masks::IMMEDIATE_TO_REG_MOV_W_BIT as u8 != 0
     } else {
-        return first_byte & Masks::W_BIT as u8 != 0;
+        first_byte & Masks::W_BIT as u8 != 0
     }
 }
 
@@ -137,14 +132,16 @@ fn main() {
         let first_byte = binary_contents[i];
         let second_byte = binary_contents[i + 1];
 
+
+        let memory_mode = determine_memory_mode(second_byte);
         let instruction = determine_instruction(&op_codes, first_byte);
 
-        let reg_register = get_register(true, instruction.op, first_byte, second_byte);
-        let rm_register = get_register(false, instruction.op, first_byte, second_byte);
+        let reg_register = get_register(true, instruction, memory_mode, first_byte, second_byte);
+        let rm_register = get_register(false, instruction, memory_mode, first_byte, second_byte);
 
         println!(
-            "Mnemonic: {}, reg_register: {}, rm_register: {}, operation: {:?}",
-            instruction.mnemonic, reg_register, rm_register, instruction.op
+            "reg_register: {}, rm_register: {}, operation: {:?}, memory mode: {:?}",
+            reg_register, rm_register, instruction, memory_mode
         );
 
         i += 2
