@@ -17,7 +17,12 @@ use crate::bits::MemoryMode::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode
     its always set to 1 with the immediate to register/memory MOV instruction.
     Normally it's not hardcoded so with the mov immediate instruction we just have to check the w bit to know
     if its a 8 or 16-bit operation but with the others we have to check both the w and s bits.
-    the s bit has to be set to 0 and w has to be set to 1 for it to be a 16-bit operation.
+
+
+    TODO:
+    Figure out what the s bit actually means because with the CMP instruction,
+    the instruction sheet is saying that there is 16-bit data if s:w=1, what does that even mean????
+    and then for example with the SUB instruction there is 16-bit data if s:w=01, what the hell? Is this a mistake?
  */
 
 /* FIXME: The third instruction in the listing_0041 is not being decoded correctly.
