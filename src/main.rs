@@ -4,10 +4,26 @@ use bits::*;
 
 use core::panic;
 use std::{env, fs};
+
 use crate::bits::MemoryMode::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement};
 
+/*
+    TODO: we have to take into consideration the s bit in the first byte.
+    As it turns out, it's actually required in the immediate to register/memory operations
+    to know if the operation is actually moving a 8 or 16-bit immediate value into a register/memory.
+
+    As of currently, we are not taking the s bit into consideration anywhere.
+
+    its always set to 1 with the immediate to register/memory MOV instruction.
+    Normally it's not hardcoded so with the mov immediate instruction we just have to check the w bit to know
+    if its a 8 or 16-bit operation but with the others we have to check both the w and s bits.
+    the s bit has to be set to 0 and w has to be set to 1 for it to be a 16-bit operation.
+ */
 
 /* FIXME: The third instruction in the listing_0041 is not being decoded correctly.
+    This might actually be related to the TODO added on top of the page.
+    The first TODO might actually fix the immediate values talked about in this FIXME.
+
    The instruction is add si, 2
    We are decoding the register correctly, but the immediate is wrong.
    the immediate is currently being decoded as 50434 when it should be 2.
