@@ -28,9 +28,6 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     and then for example with the SUB instruction there is 16-bit data if s:w=01, what the hell? Is this a mistake?
  */
 
-// TODO [Listing0039] - We have to calculate the 8 and 16-bit displacements.
-// TODO [Listing0039] - Take into consideration the D bit.
-
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
 fn is_word_size(first_byte: u8, inst_type: InstructionType) -> bool {
