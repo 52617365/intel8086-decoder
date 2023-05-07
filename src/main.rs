@@ -28,24 +28,8 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     and then for example with the SUB instruction there is 16-bit data if s:w=01, what the hell? Is this a mistake?
  */
 
-/* FIXME: The third instruction in the listing_0041 is not being decoded correctly.
-    This might actually be related to the TODO added on top of the page.
-    The first TODO might actually fix the immediate values talked about in this FIXME.
-
-   The instruction is add si, 2
-   We are decoding the register correctly, but the immediate is wrong.
-   the immediate is currently being decoded as 50434 when it should be 2.
-
-   The same is happening with the other immediate value moves.
-
-   On top of this, there is something strange going on with the increments still even after the recent fix.
-   Some operation are being skipped which means that we are incrementing too fast.
-
-   Immediate to register increments are currently wrong.
-*/
-
-
 // TODO [Listing0039] - We have to calculate the 8 and 16-bit displacements.
+// TODO [Listing0039] - Take into consideration the D bit.
 
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
