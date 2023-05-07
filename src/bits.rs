@@ -12,7 +12,6 @@
 // I'm trying to follow a similar approach to Casey Muratori, where he first did a
 // Lexical analyzer type of phase to get tokens out of the bit patterns.
 
-use crate::bits::InstructionType::RegisterMemory;
 use crate::bits::Masks::MOD_BITS;
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 use crate::is_word_size;
@@ -161,7 +160,7 @@ pub fn determine_memory_mode(second_byte: u8) -> MemoryModeEnum {
 
 pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool, memory_mode: MemoryModeEnum) -> usize {
     match inst {
-        RegisterMemory => {
+        InstructionType::RegisterMemory => {
             if memory_mode == MemoryModeNoDisplacement {
                 return 2;
             } else if memory_mode == MemoryMode8Bit {

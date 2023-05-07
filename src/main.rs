@@ -4,7 +4,7 @@ use bits::*;
 
 use core::panic;
 use std::{env, fs};
-use crate::bits::InstructionType::ImmediateToRegisterMOV;
+use crate::bits::InstructionType::{ImmediateToRegisterMemory, ImmediateToRegisterMOV, RegisterMemory};
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
@@ -26,6 +26,12 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     Figure out what the s bit actually means because with the CMP instruction,
     the instruction sheet is saying that there is 16-bit data if s:w=1, what does that even mean????
     and then for example with the SUB instruction there is 16-bit data if s:w=01, what the hell? Is this a mistake?
+
+    TODO:
+    Take into consideration the mnemonic, it can be either ADD, SUB, CMP or MOV
+
+    TODO:
+    Conditional jumps
  */
 
 
@@ -163,6 +169,35 @@ fn combine_bytes(high_byte: u8, low_byte: u8) -> u16 {
     ((high_byte as u16) << 8) | (low_byte as u16)
 }
 
+fn get_mnemonic(first_byte: u8, second_byte: u8, inst: InstructionType) -> &'static str {
+    // We need this to determine the mnemonic for immediate to register moves.
+    let reg_field = second_byte & Masks::REG_BITS as u8;
+
+    if inst == ImmediateToRegisterMOV {
+        return "mov"
+    }
+
+    if inst == RegisterMemory {
+        return match first_byte {
+            0b00000000 | 0b00000001 | 0b00000010 | 0b00000011 => "add",
+            0b00101000 | 0b00101001 | 0b00101010 | 0b00101011 => "sub",
+            0b00111000 | 0b00111001 | 0b00111010 | 0b00111011 => "cmp",
+            0b10001000 | 0b10001001 | 0b10001010 | 0b10001011 => "mov",
+            _ => panic!("unknown instruction: {:?}, first_byte: {:08b}", inst, first_byte)
+        }
+    } else if inst == ImmediateToRegisterMemory {
+        return match (first_byte, reg_field) {
+            (0b10000000, 0b00_101_000) | (0b10000001, 0b00_101_000) | (0b10000010, 0b00_101_000) | (0b10000011, 0b00_101_000) => "sub",
+            (0b10000000, 0b00_111_000) | (0b10000001, 0b00_111_000) | (0b10000010, 0b00_111_000) | (0b10000011, 0b00_111_000) => "cmp",
+            (0b10000000, 0b00_000_000) | (0b10000001, 0b00_000_000) | (0b10000010, 0b00_000_000) | (0b10000011, 0b00_000_000) => "add",
+            (0b11000110, 0b00_000_000) | (0b11000111, 0b00_000_000) => "mov",
+            _ => panic!("unknown instruction: {:?}, first_byte: {:08b}, reg_field: {:08b}", inst, first_byte, reg_field)
+        }
+    } else {
+        todo!()
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let binary_path = &args[1];
@@ -181,6 +216,7 @@ fn main() {
         let memory_mode = determine_memory_mode(second_byte);
         let instruction_size = determine_instruction_byte_size(instruction, is_word_size, memory_mode);
         let reg_is_dest = first_byte & D_BITS as u8 != 0;
+        let mnemonic = get_mnemonic(first_byte, second_byte, instruction);
 
         let mut reg_or_immediate = String::new();
         let mut rm_or_immediate = String::new();
@@ -223,45 +259,45 @@ fn main() {
         }
 
         if instruction == InstructionType::ImmediateToRegisterMemory {
-            println!("mov {}, {}", rm_or_immediate, reg_or_immediate);
+            println!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
             // println!("Immediate: {} | R/M: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i, is_word_size);
         } else if instruction == ImmediateToRegisterMOV {
-            println!("mov {}, {}", reg_or_immediate, rm_or_immediate);
+            println!("{} {}, {}", mnemonic, reg_or_immediate, rm_or_immediate);
             // println!("Immediate value: {} | REG: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", rm_or_immediate, reg_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i, is_word_size);
         } else if instruction == InstructionType::RegisterMemory{
             if memory_mode == MemoryModeNoDisplacement {
                 if reg_is_dest {
-                    println!("mov {}, [{}]", reg_or_immediate, rm_or_immediate)
+                    println!("{} {}, [{}]", mnemonic, reg_or_immediate, rm_or_immediate)
                 } else {
-                    println!("mov [{}], {}", rm_or_immediate, reg_or_immediate)
+                    println!("{} [{}], {}", mnemonic, rm_or_immediate, reg_or_immediate)
                 }
             } else if memory_mode == MemoryMode8Bit {
                 let disp = binary_contents[i + 2] as usize;
                 if reg_is_dest {
-                    println!("mov {}, [{} + {}]", reg_or_immediate, rm_or_immediate, disp)
+                    println!("{} {}, [{} + {}]", mnemonic, reg_or_immediate, rm_or_immediate, disp)
                 } else {
-                    println!("mov [{} + {}], {}", rm_or_immediate, disp, reg_or_immediate)
+                    println!("{} [{} + {}], {}", mnemonic, rm_or_immediate, disp, reg_or_immediate)
                 }
             } else if memory_mode == MemoryMode16Bit {
                 let first_disp = binary_contents[i + 2];
                 let second_disp = binary_contents[i + 3];
                 let disp = combine_bytes(second_disp, first_disp);
                 if reg_is_dest {
-                    println!("mov {}, [{} + {}]", reg_or_immediate, rm_or_immediate, disp)
+                    println!("{} {}, [{} + {}]", mnemonic, reg_or_immediate, rm_or_immediate, disp)
                 } else {
-                    println!("mov [{} + {}], {}", rm_or_immediate, disp, reg_or_immediate)
+                    println!("{} [{} + {}], {}", mnemonic, rm_or_immediate, disp, reg_or_immediate)
                 }
             } else if memory_mode == RegisterMode {
                 if reg_is_dest {
-                    println!("mov {}, {}", reg_or_immediate, rm_or_immediate)
+                    println!("{} {}, {}", mnemonic, reg_or_immediate, rm_or_immediate)
                 } else {
-                    println!("mov {}, {}", rm_or_immediate, reg_or_immediate)
+                    println!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate)
                 }
             } else if memory_mode == DirectMemoryOperation {
                 if reg_is_dest {
-                    println!("mov {}, [{}]", reg_or_immediate, rm_or_immediate)
+                    println!("{} {}, [{}]", mnemonic, reg_or_immediate, rm_or_immediate)
                 } else {
-                    println!("mov [{}], {}", rm_or_immediate, reg_or_immediate)
+                    println!("{} [{}], {}", mnemonic, rm_or_immediate, reg_or_immediate)
                 }
             }
         }
