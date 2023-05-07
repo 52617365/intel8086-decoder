@@ -47,13 +47,12 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
 
 // TODO [Listing0039] - We have to calculate the 8 and 16-bit displacements.
 // TODO [Listing0039] - The 16-bit immediate values are not getting summed correctly, works with 8-bit values.
-// TODO [Listing0039] - Some of the immediate value registers are wrong. E.g. dh should be ch
 
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
 fn is_word_size(first_byte: u8, inst_type: InstructionType) -> bool {
-    return if inst_type == InstructionType::ImmediateToRegisterMOV {
-        first_byte & Masks::IMMEDIATE_TO_REG_MOV_W_BIT as u8 != 0
+    return if inst_type == ImmediateToRegisterMOV {
+        first_byte & IMMEDIATE_TO_REG_MOV_W_BIT as u8 != 0
     } else {
         first_byte & Masks::W_BIT as u8 != 0
     }
@@ -87,7 +86,7 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
             _ => panic!("unknown register - get_register - get_reg branch\nreg was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", reg_res, first_byte, second_byte),
         };
     }
-    else if inst == InstructionType::ImmediateToRegisterMOV {
+    else if inst == ImmediateToRegisterMOV {
         let immediate_mov_reg_register = first_byte & IMMEDIATE_TO_MOV_REG_BITS as u8;
         return match (immediate_mov_reg_register, is_word_size) {
             (0b_00_000_000, true) => "ax",
@@ -228,7 +227,7 @@ fn main() {
         // This case is actually the complete opposite from the previous one.
         // The immediate to register MOV instruction actually does not have the R/M register
         // but has the REG register it used to move immediate values to.
-        if instruction == InstructionType::ImmediateToRegisterMOV {
+        if instruction == ImmediateToRegisterMOV {
             // and the R/M Register actually is not used at all with the MOV immediate instruction.
 
             // With the immediate to register mov instruction, the immediate is stored in the second (and third byte if word sized).
@@ -246,7 +245,7 @@ fn main() {
 
         if instruction == InstructionType::ImmediateToRegisterMemory {
             println!("Immediate: {} | R/M: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i, is_word_size);
-        } else if instruction == InstructionType::ImmediateToRegisterMOV {
+        } else if instruction == ImmediateToRegisterMOV {
             println!("Immediate value: {} | REG: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", rm_or_immediate, reg_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i, is_word_size);
         } else if instruction == InstructionType::RegisterMemory{
             println!(
