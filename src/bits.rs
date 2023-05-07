@@ -22,6 +22,9 @@ pub enum InstructionType {
     RegisterMemory,
     ImmediateToRegisterMemory,
     ImmediateToRegisterMOV,
+    ImmediateToAccumulatorADD,
+    ImmediateToAccumulatorSUB,
+    ImmediateToAccumulatorCMP,
 }
 
 
@@ -50,6 +53,17 @@ const IMMEDIATE_TO_REGISTER_MOV_ID: [u8; 16] = [
     0b10111000, 0b10111001, 0b10111010, 0b10111011, 0b10111100, 0b10111101, 0b10111110, 0b10111111,
 ];
 
+const IMMEDIATE_TO_ACCUMULATOR_ADD_ID: [u8; 2] = [
+    0b00000100, 0b00000101
+];
+
+const IMMEDIATE_TO_ACCUMULATOR_SUB_ID: [u8; 2] = [
+    0b00101100, 0b00101101
+];
+
+const IMMEDIATE_TO_ACCUMULATOR_CMP_ID: [u8; 2] = [
+    0b00111100, 0b00111101
+];
 //
 
 pub struct OpCode {
@@ -88,6 +102,30 @@ pub fn construct_opcodes() -> Vec<OpCode> {
         let op_code = OpCode {
             bit_pattern: imm_to_reg_mov,
             t: InstructionType::ImmediateToRegisterMOV,
+        };
+        op_codes.push(op_code)
+    }
+
+    for imm in IMMEDIATE_TO_ACCUMULATOR_ADD_ID {
+        let op_code = OpCode {
+            bit_pattern: imm,
+            t: InstructionType::ImmediateToAccumulatorADD,
+        };
+        op_codes.push(op_code)
+    }
+
+    for imm in IMMEDIATE_TO_ACCUMULATOR_CMP_ID {
+        let op_code = OpCode {
+            bit_pattern: imm,
+            t: InstructionType::ImmediateToAccumulatorCMP,
+        };
+        op_codes.push(op_code)
+    }
+
+    for imm in IMMEDIATE_TO_ACCUMULATOR_SUB_ID {
+        let op_code = OpCode {
+            bit_pattern: imm,
+            t: InstructionType::ImmediateToAccumulatorSUB,
         };
         op_codes.push(op_code)
     }
@@ -182,12 +220,13 @@ pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool
                 return 5;
             }
         }
-        InstructionType::ImmediateToRegisterMOV => {
+        InstructionType::ImmediateToRegisterMOV | InstructionType::ImmediateToAccumulatorSUB | InstructionType::ImmediateToAccumulatorADD => {
             if is_word_size {
                 return 3;
             } else {
                 return 2;
             }
         }
+        InstructionType::ImmediateToAccumulatorCMP => return 2
     }
 }

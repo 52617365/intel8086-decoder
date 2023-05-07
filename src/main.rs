@@ -4,7 +4,7 @@ use bits::*;
 
 use core::panic;
 use std::{env, fs};
-use crate::bits::InstructionType::{ImmediateToRegisterMemory, ImmediateToRegisterMOV, RegisterMemory};
+use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumulatorCMP, ImmediateToRegisterMemory, ImmediateToRegisterMOV, ImmediateToAccumulatorSUB, RegisterMemory};
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
@@ -28,7 +28,16 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     and then for example with the SUB instruction there is 16-bit data if s:w=01, what the hell? Is this a mistake?
 
     TODO:
-    Conditional jumps
+    Conditional jumps, TEST SUPPORT for the added immediate to accumulator.
+
+    FIXME:
+    in the listing_0041, the third instruction should be add si, 2 but instead it's add si, 709.
+    also, in the beginning, we only see 2 immediate to register add operations but we should see 3 in the start.
+    it could be that the add si, 709 is doing a 16-bit operation in our code when it should be doing a 8-bit operation
+    therefore it's possibly skipping the next operation because it's going forward too much but I'm not sure.
+
+    It could also be that we are not handling the s bit at all currently and us not handling it results in us
+    thinking it's a 16-bit operation even though it's not.
  */
 
 
@@ -46,6 +55,13 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
     let reg_res = second_byte & Masks::REG_BITS as u8;
     let is_word_size = is_word_size(first_byte, inst);
 
+    if inst == ImmediateToAccumulatorSUB || inst == ImmediateToAccumulatorCMP || inst == ImmediateToAccumulatorADD {
+        if is_word_size {
+            return "ax"
+        } else {
+            return "al"
+        }
+    }
     if get_reg && inst != ImmediateToRegisterMOV
     {
             return match (reg_res, is_word_size) {
@@ -93,7 +109,7 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
         }
     } else{
         if memory_mode == DirectMemoryOperation || memory_mode == RegisterMode
-            || inst == InstructionType::ImmediateToRegisterMemory
+            || inst == ImmediateToRegisterMemory
         {
             return match (rm_res, is_word_size) {
                 (0b_00_000_000, true) => "ax",
@@ -173,6 +189,15 @@ fn get_mnemonic(first_byte: u8, second_byte: u8, inst: InstructionType) -> &'sta
     if inst == ImmediateToRegisterMOV {
         return "mov"
     }
+    if inst == ImmediateToAccumulatorSUB {
+        return "sub"
+    }
+    if inst == ImmediateToAccumulatorCMP {
+        return "cmp"
+    }
+    if inst == ImmediateToAccumulatorADD {
+        return "add"
+    }
 
     if inst == RegisterMemory {
         return match first_byte {
@@ -220,7 +245,7 @@ fn main() {
 
         // We are doing this if statement because in the case of an ImmediateToRegisterMemory (NON MOV one)
         // we actually do not have a REG register. the immediate value is always moved into the R/M register.
-        if instruction == InstructionType::ImmediateToRegisterMemory {
+        if instruction == ImmediateToRegisterMemory {
             if is_word_size {
                 // the fifth and sixth byte contain the immediate value because w is set to 1 (word size), we combine these two bytes and then cast it to a decimal.
                 let fifth_byte = binary_contents[i + 4];
@@ -231,7 +256,23 @@ fn main() {
                 let fifth_byte = binary_contents[i + 4];
                 reg_or_immediate = (fifth_byte as usize).to_string();
             }
-        } else {
+        } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB{
+            if is_word_size {
+                let third_byte = binary_contents[i + 2];
+                let combined = combine_bytes(third_byte, second_byte);
+                reg_or_immediate = (combined as usize).to_string();
+                // TODO: make a comment for this so I remember why it's in REG even though this instruction doesnt
+                // use registers from the bits.
+                // (it's because I don't want to make a new variable for it.)
+            } else {
+                reg_or_immediate = (second_byte as usize).to_string();
+                // TODO: make a comment for this so I remember why it's in REG even though this instruction doesnt
+            }
+        }
+        else if instruction == ImmediateToAccumulatorCMP { // this instruction for some reason is always 2 bytes only.
+            reg_or_immediate = (second_byte as usize).to_string();
+        }
+        else {
             // In this case its actually not an immediate, instead the string gets populated with the reg register.
             reg_or_immediate = get_register(true, instruction, memory_mode, first_byte, second_byte).parse().unwrap();
         }
@@ -255,13 +296,22 @@ fn main() {
             rm_or_immediate = get_register(false, instruction, memory_mode, first_byte, second_byte).parse().unwrap();
         }
 
-        if instruction == InstructionType::ImmediateToRegisterMemory {
+        if instruction == ImmediateToRegisterMemory {
             println!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
             // println!("Immediate: {} | R/M: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i, is_word_size);
         } else if instruction == ImmediateToRegisterMOV {
             println!("{} {}, {}", mnemonic, reg_or_immediate, rm_or_immediate);
             // println!("Immediate value: {} | REG: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", rm_or_immediate, reg_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i, is_word_size);
-        } else if instruction == InstructionType::RegisterMemory{
+        } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB || instruction == ImmediateToAccumulatorCMP {
+
+            // NOTE!!!!: with the ImmediateToAccumulator operations, the registers are not specified in the bits,
+            // instead, they are hard coded. if W = 1 then the register an immediate is getting moved to is ax, else al.
+            // the reason why we are printing the reg_or_immediate variable is because we store the immediate value in there.
+            // this is because we don't want to make a new variable for just one operation. The name is misleading but live with it.
+
+            let ax_or_al = get_register(true, instruction, memory_mode, first_byte, second_byte);
+            println!("{} {}, {}", mnemonic, ax_or_al, reg_or_immediate);
+        } else if instruction == RegisterMemory{
             if memory_mode == MemoryModeNoDisplacement {
                 if reg_is_dest {
                     println!("{} {}, [{}]", mnemonic, reg_or_immediate, rm_or_immediate)
