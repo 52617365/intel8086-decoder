@@ -132,6 +132,8 @@ pub enum Masks {
     RM_BITS = 0b_00000111,
     REG_BITS = 0b_00111000,
 }
+// It's the same bits but I want to express it in the name.
+pub const IMMEDIATE_TO_MOV_REG_BITS: Masks = Masks::RM_BITS;
 
 
 // TODO determine_memory_mode: We are currently not handling immediate value to register correctly. It gets represented as a MemoryMode16bit operation.

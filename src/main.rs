@@ -4,6 +4,8 @@ use bits::*;
 
 use core::panic;
 use std::{env, fs};
+use crate::bits::InstructionType::ImmediateToRegisterMOV;
+use crate::bits::Masks::IMMEDIATE_TO_REG_MOV_W_BIT;
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 
@@ -44,6 +46,8 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
 
 
 // TODO [Listing0039] - We have to calculate the 8 and 16-bit displacements.
+// TODO [Listing0039] - The 16-bit immediate values are not getting summed correctly, works with 8-bit values.
+// TODO [Listing0039] - Some of the immediate value registers are wrong. E.g. dh should be ch
 
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
@@ -60,8 +64,7 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
     let reg_res = second_byte & Masks::REG_BITS as u8;
     let is_word_size = is_word_size(first_byte, inst);
 
-    if get_reg
-        || inst == InstructionType::ImmediateToRegisterMOV
+    if get_reg && inst != ImmediateToRegisterMOV
     {
             return match (reg_res, is_word_size) {
             (0b_00_000_000, true) => "ax",
@@ -83,7 +86,30 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
             (0b_00_111_000, false) => "bh",
             _ => panic!("unknown register - get_register - get_reg branch\nreg was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", reg_res, first_byte, second_byte),
         };
-    } else {
+    }
+    else if inst == InstructionType::ImmediateToRegisterMOV {
+        let immediate_mov_reg_register = first_byte & IMMEDIATE_TO_MOV_REG_BITS as u8;
+        return match (immediate_mov_reg_register, is_word_size) {
+            (0b_00_000_000, true) => "ax",
+            (0b_00_000_001, true) => "cx",
+            (0b_00_000_010, true) => "dx",
+            (0b_00_000_011, true) => "bx",
+            (0b_00_000_100, true) => "sp",
+            (0b_00_000_101, true) => "bp",
+            (0b_00_000_110, true) => "si",
+            (0b_00_000_111, true) => "di",
+            //
+            (0b_00_000_000, false) => "al",
+            (0b_00_000_001, false) => "cl",
+            (0b_00_000_010, false) => "dl",
+            (0b_00_000_011, false) => "bl",
+            (0b_00_000_100, false) => "ah",
+            (0b_00_000_101, false) => "ch",
+            (0b_00_000_110, false) => "dh",
+            (0b_00_000_111, false) => "bh",
+            _ => panic!("Did not expect us to get here. first_byte: {}, second_byte: {}, inst: {:?}", first_byte, second_byte, inst)
+        }
+    } else{
         if memory_mode == DirectMemoryOperation || memory_mode == RegisterMode
             || inst == InstructionType::ImmediateToRegisterMemory
         {
@@ -219,13 +245,13 @@ fn main() {
         }
 
         if instruction == InstructionType::ImmediateToRegisterMemory {
-            println!("Immediate value: {}, R/M Register: {}, operation: {:?}, memory_mode: {:?}, instruction: {}, first_byte: {:08b}, second_byte: {:08b}, index: {}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i);
+            println!("Immediate: {} | R/M: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i, is_word_size);
         } else if instruction == InstructionType::ImmediateToRegisterMOV {
-            println!("Immediate value: {}, REG Register: {}, operation: {:?}, memory_mode: {:?}, instruction: {}, first_byte: {:08b}, second_byte: {:08b}, index: {}", rm_or_immediate, reg_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i);
+            println!("Immediate value: {} | REG: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", rm_or_immediate, reg_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i, is_word_size);
         } else if instruction == InstructionType::RegisterMemory{
             println!(
-                "reg_register: {}, rm_register: {}, operation: {:?}, memory_mode: {:?}, instruction: {}, first_byte: {:08b}, second_byte: {:08b}, index: {}",
-                reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte, i
+                "REG: {} | R/M: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}",
+                reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte, i, is_word_size
             );
         }
         else
