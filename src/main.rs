@@ -28,9 +28,6 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     and then for example with the SUB instruction there is 16-bit data if s:w=01, what the hell? Is this a mistake?
 
     TODO:
-    Take into consideration the mnemonic, it can be either ADD, SUB, CMP or MOV
-
-    TODO:
     Conditional jumps
  */
 
