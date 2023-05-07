@@ -5,7 +5,7 @@ use bits::*;
 use core::panic;
 use std::{env, fs};
 use crate::bits::InstructionType::ImmediateToRegisterMOV;
-use crate::bits::Masks::IMMEDIATE_TO_REG_MOV_W_BIT;
+use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 
@@ -183,6 +183,7 @@ fn main() {
         let is_word_size = is_word_size(first_byte, instruction);
         let memory_mode = determine_memory_mode(second_byte);
         let instruction_size = determine_instruction_byte_size(instruction, is_word_size, memory_mode);
+        let reg_is_dest = first_byte & D_BITS as u8 != 0;
 
         let mut reg_or_immediate = String::new();
         let mut rm_or_immediate = String::new();
@@ -225,14 +226,47 @@ fn main() {
         }
 
         if instruction == InstructionType::ImmediateToRegisterMemory {
-            println!("Immediate: {} | R/M: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i, is_word_size);
+            println!("mov {}, {}", rm_or_immediate, reg_or_immediate);
+            // println!("Immediate: {} | R/M: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i, is_word_size);
         } else if instruction == ImmediateToRegisterMOV {
-            println!("Immediate value: {} | REG: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", rm_or_immediate, reg_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i, is_word_size);
+            println!("mov {}, {}", reg_or_immediate, rm_or_immediate);
+            // println!("Immediate value: {} | REG: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", rm_or_immediate, reg_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i, is_word_size);
         } else if instruction == InstructionType::RegisterMemory{
-            println!(
-                "REG: {} | R/M: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}",
-                reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte, i, is_word_size
-            );
+            if memory_mode == MemoryModeNoDisplacement {
+                if reg_is_dest {
+                    println!("mov {}, [{}]", reg_or_immediate, rm_or_immediate)
+                } else {
+                    println!("mov [{}], {}", rm_or_immediate, reg_or_immediate)
+                }
+            } else if memory_mode == MemoryMode8Bit {
+                let disp = binary_contents[i + 2] as usize;
+                if reg_is_dest {
+                    println!("mov {}, [{} + {}]", reg_or_immediate, rm_or_immediate, disp)
+                } else {
+                    println!("mov [{} + {}], {}", rm_or_immediate, disp, reg_or_immediate)
+                }
+            } else if memory_mode == MemoryMode16Bit {
+                let first_disp = binary_contents[i + 2];
+                let second_disp = binary_contents[i + 3];
+                let disp = combine_bytes(second_disp, first_disp);
+                if reg_is_dest {
+                    println!("mov {}, [{} + {}]", reg_or_immediate, rm_or_immediate, disp)
+                } else {
+                    println!("mov [{} + {}], {}", rm_or_immediate, disp, reg_or_immediate)
+                }
+            } else if memory_mode == RegisterMode {
+                if reg_is_dest {
+                    println!("mov {}, {}", reg_or_immediate, rm_or_immediate)
+                } else {
+                    println!("mov {}, {}", rm_or_immediate, reg_or_immediate)
+                }
+            } else if memory_mode == DirectMemoryOperation {
+                if reg_is_dest {
+                    println!("mov {}, [{}]", reg_or_immediate, rm_or_immediate)
+                } else {
+                    println!("mov [{}], {}", rm_or_immediate, reg_or_immediate)
+                }
+            }
         }
         else
         {
