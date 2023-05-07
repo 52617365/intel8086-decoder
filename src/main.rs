@@ -46,7 +46,6 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
 
 
 // TODO [Listing0039] - We have to calculate the 8 and 16-bit displacements.
-// TODO [Listing0039] - The 16-bit immediate values are not getting summed correctly, works with 8-bit values.
 
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
@@ -179,10 +178,8 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
     }
 }
 
-// sig stand for significant
-fn combine_bytes(most_sig_byte: u8, least_sig_byte: u8) -> u16 {
-    let combined_bytes: u16 = ((most_sig_byte as u16) << 8) | (least_sig_byte as u16);
-    return combined_bytes;
+fn combine_bytes(high_byte: u8, low_byte: u8) -> u16 {
+    ((high_byte as u16) << 8) | (low_byte as u16)
 }
 
 fn main() {
@@ -213,7 +210,7 @@ fn main() {
                 // the fifth and sixth byte contain the immediate value because w is set to 1 (word size), we combine these two bytes and then cast it to a decimal.
                 let fifth_byte = binary_contents[i + 4];
                 let sixth_byte = binary_contents[i + 5];
-                let combined = combine_bytes(fifth_byte, sixth_byte);
+                let combined = combine_bytes(sixth_byte, fifth_byte);
                 reg_or_immediate = (combined as usize).to_string();
             } else {
                 let fifth_byte = binary_contents[i + 4];
@@ -232,7 +229,7 @@ fn main() {
 
             // With the immediate to register mov instruction, the immediate is stored in the second (and third byte if word sized).
             if is_word_size {
-                let third_byte = binary_contents[i + 4];
+                let third_byte = binary_contents[i + 2];
                 let combined = combine_bytes(third_byte, second_byte);
                 rm_or_immediate = (combined as usize).to_string();
             } else {
