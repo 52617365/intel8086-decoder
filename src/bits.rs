@@ -12,8 +12,10 @@
 // I'm trying to follow a similar approach to Casey Muratori, where he first did a
 // Lexical analyzer type of phase to get tokens out of the bit patterns.
 
+use crate::bits::InstructionType::RegisterMemory;
 use crate::bits::Masks::MOD_BITS;
-use crate::bits::MemoryMode::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
+use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
+use crate::is_word_size;
 
 // InstructionTable contains all the possible instructions that we are trying to decode.
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -113,8 +115,9 @@ pub fn determine_instruction(op_codes: &Vec<OpCode>, first_byte: u8) -> Instruct
 // 11 = Register Mode, no displacement, expect when R/M Field is 110.
 // when MOD is 11 and R/M is 110, it means its a direct memory mode operation
 // the direct memory is a 16 bit address.
+
 #[derive(PartialEq, Clone, Copy, Debug)]
-pub enum MemoryMode {
+pub enum MemoryModeEnum {
     MemoryModeNoDisplacement,
     MemoryMode8Bit,
     MemoryMode16Bit,
@@ -132,8 +135,10 @@ pub enum Masks {
 
 
 // TODO determine_memory_mode: We are currently not handling immediate value to register correctly. It gets represented as a MemoryMode16bit operation.
-pub fn determine_memory_mode(second_byte: u8) -> MemoryMode {
-    match second_byte & MOD_BITS as u8 {
+// We are only taking inst and is_word_size into the function to determine the size correctly.
+pub fn determine_memory_mode(second_byte: u8) -> MemoryModeEnum {
+    let mod_field = second_byte & MOD_BITS as u8;
+    match mod_field{
         0b_00000000 => {
             // So the rm_res determines if the memory mode with no displacement is actually
             // a 16-bit memory operation. Direct memory operation has R/M set to 110.
@@ -148,5 +153,39 @@ pub fn determine_memory_mode(second_byte: u8) -> MemoryMode {
         0b_10000000 => MemoryMode16Bit,
         0b_11000000 => RegisterMode,
         _ => panic!("Invalid second_byte bit pattern, could not determine memory mode: {}", second_byte),
+    }
+}
+
+pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool, memory_mode: MemoryModeEnum) -> usize {
+    match inst {
+        RegisterMemory => {
+            if memory_mode == MemoryModeNoDisplacement {
+                return 2;
+            } else if memory_mode == MemoryMode8Bit {
+                return 3;
+            } else if memory_mode == MemoryMode16Bit {
+                return 4;
+            } else if memory_mode == RegisterMode {
+                return 2;
+            } else if memory_mode == DirectMemoryOperation {
+                return 4;
+            } else {
+                panic!("Unknown memory_mode operation. We did not expect to get here.\nmemory_mode: {:?}, inst: {:?}, is_word_size: {}", memory_mode, inst, is_word_size);
+            }
+        }
+        InstructionType::ImmediateToRegisterMemory => {
+            if is_word_size {
+                return 6;
+            } else {
+                return 5;
+            }
+        }
+        InstructionType::ImmediateToRegisterMOV => {
+            if is_word_size {
+                return 3;
+            } else {
+                return 2;
+            }
+        }
     }
 }

@@ -5,10 +5,11 @@ use bits::*;
 use core::panic;
 use std::{env, fs};
 
-use crate::bits::MemoryMode::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
+use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 
 /*
-    TODO: we have to take into consideration the s bit in the first byte.
+
+    TODO: [Listing0041] - we have to take into consideration the s bit in the first byte.
     As it turns out, it's actually required in the immediate to register/memory operations
     to know if the operation is actually moving a 8 or 16-bit immediate value into a register/memory.
 
@@ -40,6 +41,11 @@ use crate::bits::MemoryMode::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode
 
    Immediate to register increments are currently wrong.
 */
+
+
+// TODO [Listing0039] - We have to calculate the 8 and 16-bit displacements.
+
+
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
 fn is_word_size(first_byte: u8, inst_type: InstructionType) -> bool {
     return if inst_type == InstructionType::ImmediateToRegisterMOV {
@@ -49,7 +55,7 @@ fn is_word_size(first_byte: u8, inst_type: InstructionType) -> bool {
     }
 }
 
-fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryMode, first_byte: u8, second_byte: u8) -> &'static str {
+fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnum, first_byte: u8, second_byte: u8) -> &'static str {
     let rm_res = second_byte & Masks::RM_BITS as u8;
     let reg_res = second_byte & Masks::REG_BITS as u8;
     let is_word_size = is_word_size(first_byte, inst);
@@ -167,9 +173,10 @@ fn main() {
         let second_byte = binary_contents[i + 1];
 
 
-        let memory_mode = determine_memory_mode(second_byte);
         let instruction = determine_instruction(&op_codes, first_byte);
         let is_word_size = is_word_size(first_byte, instruction);
+        let memory_mode = determine_memory_mode(second_byte);
+        let instruction_size = determine_instruction_byte_size(instruction, is_word_size, memory_mode);
 
         let mut reg_or_immediate = String::new();
         let mut rm_or_immediate = String::new();
@@ -212,36 +219,12 @@ fn main() {
         }
 
         if instruction == InstructionType::ImmediateToRegisterMemory {
-            if is_word_size {
-                i += 6;
-            } else {
-                i += 5;
-            }
             println!("Immediate value: {}, R/M Register: {}, operation: {:?}, memory_mode: {:?}, instruction: {}, first_byte: {:08b}, second_byte: {:08b}, index: {}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i);
         } else if instruction == InstructionType::ImmediateToRegisterMOV {
-            if is_word_size {
-                i += 3;
-            } else {
-                i += 2;
-            }
             println!("Immediate value: {}, REG Register: {}, operation: {:?}, memory_mode: {:?}, instruction: {}, first_byte: {:08b}, second_byte: {:08b}, index: {}", rm_or_immediate, reg_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte,i);
         } else if instruction == InstructionType::RegisterMemory{
-            // TODO: how much do we increment in the case of direct memory address (16-bit)?
-            if memory_mode == MemoryModeNoDisplacement {
-                i += 2;
-            } else if memory_mode == MemoryMode16Bit {
-                i += 4;
-            } else if memory_mode == MemoryMode8Bit {
-                i += 3;
-            } else if memory_mode == DirectMemoryOperation {
-                i += 4;
-            } else if memory_mode == RegisterMode {
-                i += 2;
-            } else {
-                panic!("Memory mode: {:?}, did not expect to get here.", memory_mode);
-            }
             println!(
-                "reg_register: {}, rm_register: {}, operation: {:?}, memory mode: {:?}, instruction: {}, first_byte: {:08b}, second_byte: {:08b}, index: {}",
+                "reg_register: {}, rm_register: {}, operation: {:?}, memory_mode: {:?}, instruction: {}, first_byte: {:08b}, second_byte: {:08b}, index: {}",
                 reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte, i
             );
         }
@@ -250,5 +233,6 @@ fn main() {
             panic!("Unknown instruction: {:?}, did not expect to get here.", instruction);
         }
         instruction_count += 1;
+        i += instruction_size;
     }
 }
