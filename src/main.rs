@@ -5,7 +5,7 @@ use bits::*;
 use core::panic;
 use std::{env, fs};
 
-use crate::bits::MemoryMode::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement};
+use crate::bits::MemoryMode::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 
 /*
     TODO: we have to take into consideration the s bit in the first byte.
@@ -78,7 +78,7 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryMode, f
             _ => panic!("unknown register - get_register - get_reg branch\nreg was: {:08b}, first_byte was: {:08b}, second_byte was: {:08b}", reg_res, first_byte, second_byte),
         };
     } else {
-        if memory_mode == DirectMemoryOperation
+        if memory_mode == DirectMemoryOperation || memory_mode == RegisterMode
             || inst == InstructionType::ImmediateToRegisterMemory
         {
             return match (rm_res, is_word_size) {
@@ -143,7 +143,7 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryMode, f
             // 00 + 110 RM
             "" // we return an empty string because MEMORY_MODE_DIRECT does not have a register, instead it's a direct 16-bit address that will be fetched later.
         } else {
-            panic!("Unsupported operation - get_register {:?}, first_byte: {:8b}, second_byte: {:8b}", inst, first_byte, second_byte)
+            panic!("Unsupported operation - get_register - {:?}, first_byte: {:8b}, second_byte: {:8b}, memory_mode: {:?}", inst, first_byte, second_byte, memory_mode)
         }
     }
 }
@@ -202,9 +202,9 @@ fn main() {
             if is_word_size {
                 let third_byte = binary_contents[i + 4];
                 let combined = combine_bytes(third_byte, second_byte);
-                reg_or_immediate = (combined as usize).to_string();
+                rm_or_immediate = (combined as usize).to_string();
             } else {
-                reg_or_immediate = (second_byte as usize).to_string();
+                rm_or_immediate = (second_byte as usize).to_string();
             }
         } else {
             // In this case its actually not an immediate, instead the string gets populated with the R/M register.
@@ -235,6 +235,8 @@ fn main() {
                 i += 3;
             } else if memory_mode == DirectMemoryOperation {
                 i += 4;
+            } else if memory_mode == RegisterMode {
+                i += 2;
             } else {
                 panic!("Memory mode: {:?}, did not expect to get here.", memory_mode);
             }
