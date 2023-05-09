@@ -12,7 +12,7 @@
 // I'm trying to follow a similar approach to Casey Muratori, where he first did a
 // Lexical analyzer type of phase to get tokens out of the bit patterns.
 
-use crate::bits::Masks::MOD_BITS;
+use crate::bits::Masks::{D_BITS, MOD_BITS};
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 use crate::is_word_size;
 
@@ -170,11 +170,12 @@ pub enum Masks {
     REG_BITS = 0b_00111000,
     D_BITS = 0b_00000010,
 }
+pub const S_BIT_m: Masks = D_BITS;
 // It's the same bits but I want to express it in the name.
 pub const IMMEDIATE_TO_MOV_REG_BITS: Masks = Masks::RM_BITS;
 
 
-// TODO determine_memory_mode: We are currently not handling immediate value to register correctly. It gets represented as a MemoryMode16bit operation.
+// TODO: (Is this still a problem?) determine_memory_mode: We are currently not handling immediate value to register correctly. It gets represented as a MemoryMode16bit operation.
 // We are only taking inst and is_word_size into the function to determine the size correctly.
 pub fn determine_memory_mode(second_byte: u8) -> MemoryModeEnum {
     let mod_field = second_byte & MOD_BITS as u8;
@@ -196,7 +197,10 @@ pub fn determine_memory_mode(second_byte: u8) -> MemoryModeEnum {
     }
 }
 
-pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool, memory_mode: MemoryModeEnum) -> usize {
+// TODO: take into consideration that immediate to register moves might not be 16-bit even if is_word_size is set to true.
+// this is because the s bit is also taken into consideration when deciding the immediate size with the cmp, sub and add
+// operations. The mov operation doesnt care about the s bit, that's why the implementation looks like this currently.
+pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool, memory_mode: MemoryModeEnum, mnemonic: &'static str, s_bit_set: bool) -> usize {
     match inst {
         InstructionType::RegisterMemory => {
             if memory_mode == MemoryModeNoDisplacement {
@@ -214,10 +218,30 @@ pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool
             }
         }
         InstructionType::ImmediateToRegisterMemory => {
-            if is_word_size {
-                return 6;
+            if mnemonic == "mov" {
+                if is_word_size {
+                    return 6;
+                } else {
+                    return 5;
+                }
+            } else if mnemonic == "add" || mnemonic == "sub" {
+                // add is 01 sw for 16-bit
+                // this means that s bit has to be set to 0 if w is 1 for it to be 6 bytes wide.
+                if is_word_size && !s_bit_set {
+                    return 6;
+                } else {
+                    return 5;
+                }
+            } else if mnemonic == "cmp" {
+                // cmp immediate to register has 11 sw for 16-bit data.
+                // this means that we actually want the s_bit to be 1 for the instruction to be 6 bytes wide.
+                if is_word_size && s_bit_set {
+                    return 6;
+                } else {
+                    return 5;
+                }
             } else {
-                return 5;
+                panic!("Unknown mnemonic, we could not handle it. instruction type: {:?}, mnemonic: {}", inst, mnemonic)
             }
         }
         InstructionType::ImmediateToRegisterMOV | InstructionType::ImmediateToAccumulatorSUB | InstructionType::ImmediateToAccumulatorADD => {
