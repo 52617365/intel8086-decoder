@@ -28,6 +28,8 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     Conditional jumps, TEST SUPPORT for the added immediate to accumulator.
 
     FIXME: In the listing_0041, the third instruction should be add si, 2 but instead it's add si, 197.
+    It's however doing what it's supposed to do but the increments are not correct.
+    It results in the decoder using the wrong byte as the immediate.
 
     FIXME: In the beginning, we only see 1 immediate to register add operations but we should see 3 in the start.
  */
@@ -258,8 +260,11 @@ fn main() {
                     },
                     ("cmp", false) | ("add", true) | ("sub", true) => {
                         // FIXME: before this block, the immediate is already 197, when it should be 2.
-                        let fifth_byte = binary_contents[i + 4];
-                        reg_or_immediate = fifth_byte.to_string();
+                        // TODO: this leads to the immediate being 197, when it should be 2.
+                        // it's doing what it's supposed to do, but I believe that the index is getting incremented incorrectly.
+                        // leading into the wrong byte being read.
+                        let fifth_byte = binary_contents[i + 2];
+                        reg_or_immediate = (fifth_byte as usize).to_string();
                     }
                     _ => panic!("Unknown (mnemonic, s_bit_is_set): ({}, {})", mnemonic, s_bit_is_set)
                 }
@@ -358,6 +363,6 @@ fn main() {
         }
         instruction_count += 1;
         i += instruction_size;
-        print!("size: {}, count: {} - ", i, instruction_count);
+        print!("size: {}, count: {} - ", instruction_size, instruction_count);
     }
 }

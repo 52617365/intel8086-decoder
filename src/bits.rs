@@ -218,27 +218,28 @@ pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool
             }
         }
         InstructionType::ImmediateToRegisterMemory => {
+            // TODO: Is this correct? We are currently running into the wrong increments.
             if mnemonic == "mov" {
                 if is_word_size {
-                    return 6;
+                    return 4;
                 } else {
-                    return 5;
+                    return 3;
                 }
             } else if mnemonic == "add" || mnemonic == "sub" {
                 // add is 01 sw for 16-bit
                 // this means that s bit has to be set to 0 if w is 1 for it to be 6 bytes wide.
                 if is_word_size && !s_bit_set {
-                    return 6;
+                    return 4;
                 } else {
-                    return 5;
+                    return 3;
                 }
             } else if mnemonic == "cmp" {
                 // cmp immediate to register has 11 sw for 16-bit data.
                 // this means that we actually want the s_bit to be 1 for the instruction to be 6 bytes wide.
                 if is_word_size && s_bit_set {
-                    return 6;
+                    return 4;
                 } else {
-                    return 5;
+                    return 3;
                 }
             } else {
                 panic!("Unknown mnemonic, we could not handle it. instruction type: {:?}, mnemonic: {}", inst, mnemonic)
