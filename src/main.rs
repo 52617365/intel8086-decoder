@@ -27,6 +27,8 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
         first byte:  10000011
         second byte: 11111110
 
+    TODO:
+      Our decoder currently does not recognize cmp bp, 2 at all.
  */
 
 
