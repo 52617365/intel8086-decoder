@@ -89,8 +89,8 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
             _ => panic!("Did not expect us to get here. first_byte: {}, second_byte: {}, inst: {:?}", first_byte, second_byte, inst)
         }
     } else {
-        if memory_mode == DirectMemoryOperation || memory_mode == RegisterMode
-            || inst == ImmediateToRegisterMemory && memory_mode != MemoryModeNoDisplacement
+        if (memory_mode == DirectMemoryOperation || memory_mode == RegisterMode)
+            || (inst == ImmediateToRegisterMemory && memory_mode != MemoryModeNoDisplacement && memory_mode != MemoryMode16Bit && memory_mode != MemoryMode8Bit)
         {
             return match (rm_res, is_word_size) {
                 (0b_00_000_000, true) => "ax",
@@ -228,25 +228,6 @@ fn main() {
         // we actually do not have a REG register. the immediate value is always moved into the R/M register.
 
         if instruction == ImmediateToRegisterMemory {
-            /*
-                TODO: ImmediateToRegisterMemory with a 16 bit memory mode is currently not right.
-                  It also doesn't have the correct size in the instruction size determiner.
-
-
-                TODO: fix the word operation, we're currently not handling it correctly.
-                  The operation is a MemoryMode16Bit operation. We are not handling the displacement correctly.
-                  Here I believe we have to use the data field when before we didn't.
-                  ==
-                  We expect: add word [bp + si + 1000], 29
-                  We get: add word [dx], 29
-
-                  first byte: 10000011, second byte: 10000010
-
-                TODO CHECK IF HANDLED: We have to take into consideration in the instruction size determiner that the 8-bit and 16-bit memory modes care about more bytes than the other ones.
-                  This leads to more bytes being occupied by a single instruction and I don't think it's currently handled.
-                  They use the data bytes to handle the immediate value, others don't since they use the displacement bytes.
-
-            */
             if !is_word_size {
                 // regardless of the s bit, everything here 8-bit immediate if w is set to 0.
                 let third_byte = binary_contents[i + 2];
@@ -258,7 +239,7 @@ fn main() {
                 // if w=1 and s=0 and mnemonic is sub/add/cmp, it's an 16-bit immediate.
                 match (mnemonic, s_bit_is_set) {
                     ("mov", _) | ("cmp", true) | ("add", false) | ("sub", false) => {
-                        // TODO: handle 8-bit and 16-bit memory mode operations here too. (bytes in different place.
+                        // TODO: handle MemoryMode8Bit.
                         if memory_mode == MemoryMode16Bit {
                             // the immediate is guaranteed to be 16-bit because the s bit is set to 0 in this branch.
                             let fifth_byte = binary_contents[i + 4];
@@ -273,6 +254,7 @@ fn main() {
                         }
                     },
                     ("cmp", false) | ("add", true) | ("sub", true) => {
+                        // TODO: handle MemoryMode8Bit.
                         if memory_mode == MemoryMode16Bit {
                             // In this branch we guarantee that the s bit is not set. Therefore the immediate can not be a 16-bit value.
                             // With 16-bit memory mode operations the immediate is in the fifth and sixth bytes depending on the size.
@@ -324,13 +306,29 @@ fn main() {
 
         if instruction == ImmediateToRegisterMemory {
             // println!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
-            if memory_mode == MemoryModeNoDisplacement || memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit {
+            if memory_mode == MemoryModeNoDisplacement {
                 if is_word_size {
                     println!("{} word [{}], {}", mnemonic, rm_or_immediate, reg_or_immediate);
                 } else {
                     println!("{} byte [{}], {}", mnemonic, rm_or_immediate, reg_or_immediate);
                 }
                 // println!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
+            } else if memory_mode == MemoryMode8Bit {
+                let first_disp = binary_contents[i + 2];
+                if is_word_size {
+                    println!("{} word [{} + {}], {}", mnemonic, rm_or_immediate, first_disp as usize, reg_or_immediate);
+                } else {
+                    println!("{} byte [{} + {}], {}", mnemonic, rm_or_immediate, first_disp as usize, reg_or_immediate);
+                }
+            } else if memory_mode == MemoryMode16Bit {
+                let first_disp = binary_contents[i + 2];
+                let second_disp = binary_contents[i + 3];
+                let displacement = combine_bytes(second_disp, first_disp);
+                if is_word_size {
+                    println!("{} word [{} + {}], {}", mnemonic, rm_or_immediate, displacement as usize, reg_or_immediate);
+                } else {
+                    println!("{} byte [{} + {}], {}", mnemonic, rm_or_immediate, displacement as usize, reg_or_immediate);
+                }
             }
             // println!("Immediate value: {} | R/M: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte, i, is_word_size);
         } else if instruction == ImmediateToRegisterMOV {
