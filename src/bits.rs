@@ -170,7 +170,7 @@ pub enum Masks {
     REG_BITS = 0b_00111000,
     D_BITS = 0b_00000010,
 }
-pub const S_BIT_m: Masks = D_BITS;
+pub const S_BIT_M: Masks = D_BITS;
 // It's the same bits but I want to express it in the name.
 pub const IMMEDIATE_TO_MOV_REG_BITS: Masks = Masks::RM_BITS;
 
