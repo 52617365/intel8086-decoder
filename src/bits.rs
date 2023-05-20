@@ -215,6 +215,9 @@ pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool
         InstructionType::ImmediateToRegisterMemory => {
             if mnemonic == "mov" {
                 if is_word_size {
+                    if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
+
+                    }
                     return 4;
                 } else {
                     return 3;

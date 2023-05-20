@@ -18,6 +18,10 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     TODO: Why can't I use conditional breakpoints? It's really making debugging this painful.
     https://github.com/intellij-rust/intellij-rust/issues/10486
 
+    TODO:
+      In the start of the instructions, we get add bx, [bp] twice.
+      It should only happen once.
+
  */
 
 
@@ -330,6 +334,12 @@ fn main() {
                 } else {
                     println!("{} byte [{} + {}], {}", mnemonic, rm_or_immediate, displacement as usize, reg_or_immediate);
                 }
+            } else if memory_mode == RegisterMode {
+                if reg_is_dest {
+                    println!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
+                } else {
+                    println!("{} {}, {}", mnemonic, reg_or_immediate, rm_or_immediate);
+                }
             }
             // println!("Immediate value: {} | R/M: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte, i, is_word_size);
         } else if instruction == ImmediateToRegisterMOV {
@@ -387,6 +397,6 @@ fn main() {
         }
         instruction_count += 1;
         i += instruction_size;
-        print!("size: {}, count: {} - ", instruction_size, instruction_count);
+        // print!("size: {}, count: {} - ", instruction_size, instruction_count);
     }
 }
