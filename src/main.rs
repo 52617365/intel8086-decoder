@@ -303,9 +303,9 @@ fn main() {
             // println!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
             if memory_mode == MemoryModeNoDisplacement || memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit {
                 if is_word_size {
-                    println!("{} word {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
+                    println!("{} word [{}], {}", mnemonic, rm_or_immediate, reg_or_immediate);
                 } else {
-                    println!("{} byte {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
+                    println!("{} byte [{}], {}", mnemonic, rm_or_immediate, reg_or_immediate);
                 }
                 // println!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
             }
