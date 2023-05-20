@@ -21,6 +21,12 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     TODO:
       Handle CMPs
 
+      TODO: (FIXED BUT I DON'T ACTUALLY UNDERSTAND IF THE FIX WAS GOOD, INVESTIGATE AND DELETE TODO LATER:
+        We get:    cmp si, 33538
+        We expect: cmp si, 2
+        first byte:  10000011
+        second byte: 11111110
+
  */
 
 
@@ -232,15 +238,15 @@ fn main() {
 
         if instruction == ImmediateToRegisterMemory {
             if !is_word_size {
+                // TODO: Do we have to handle 8 and 16-bit memory modes here in its own branch?
                 // regardless of the s bit, everything here 8-bit immediate if w is set to 0.
                 let third_byte = binary_contents[i + 2];
                 reg_or_immediate = (third_byte as usize).to_string();
             } else { // is_word_size
-                let s_bit_is_set = first_byte & S_BIT_M as u8 == 0b00000010;
                 // MOV doesn't care about the s_bit. CMP, SUB, ADD do.
                 // if w=1 and s=1 and mnemonic is cmp, it's an 16-bit immediate.
                 // if w=1 and s=0 and mnemonic is sub/add/cmp, it's an 16-bit immediate.
-                match (mnemonic, s_bit_is_set) {
+                match (mnemonic, is_s_bit_set) {
                     ("mov", _) | ("cmp", true) | ("add", false) | ("sub", false) => {
                         // TODO: should we handle MemoryMode8Bit in the same branch?
                         if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit {
@@ -249,6 +255,10 @@ fn main() {
                             let sixth_byte = binary_contents[i + 5];
                             let combined = combine_bytes(sixth_byte, fifth_byte);
                             reg_or_immediate = (combined as usize).to_string();
+                        }
+                        else if memory_mode == RegisterMode {
+                            let third_byte = binary_contents[i + 2];
+                            reg_or_immediate = (third_byte as usize).to_string();
                         } else {
                             let third_byte = binary_contents[i + 2];
                             let fourth_byte = binary_contents[i + 3];
@@ -269,7 +279,7 @@ fn main() {
                             reg_or_immediate = (third_byte as usize).to_string();
                         }
                     }
-                    _ => panic!("Unknown (mnemonic, s_bit_is_set): ({}, {})", mnemonic, s_bit_is_set)
+                    _ => panic!("Unknown (mnemonic, s_bit_is_set): ({}, {})", mnemonic, is_s_bit_set)
                 }
             }
         } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB{
