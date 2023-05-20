@@ -18,9 +18,6 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     TODO: Why can't I use conditional breakpoints? It's really making debugging this painful.
     https://github.com/intellij-rust/intellij-rust/issues/10486
 
-    TODO:
-      In the start of the instructions, we get add bx, [bp] twice.
-      It should only happen once.
 
  */
 
