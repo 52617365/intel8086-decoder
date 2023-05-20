@@ -175,8 +175,6 @@ pub const S_BIT_m: Masks = D_BITS;
 pub const IMMEDIATE_TO_MOV_REG_BITS: Masks = Masks::RM_BITS;
 
 
-// TODO: (Is this still a problem?) determine_memory_mode: We are currently not handling immediate value to register correctly. It gets represented as a MemoryMode16bit operation.
-// We are only taking inst and is_word_size into the function to determine the size correctly.
 pub fn determine_memory_mode(second_byte: u8) -> MemoryModeEnum {
     let mod_field = second_byte & MOD_BITS as u8;
     match mod_field{
@@ -197,9 +195,6 @@ pub fn determine_memory_mode(second_byte: u8) -> MemoryModeEnum {
     }
 }
 
-// TODO: take into consideration that immediate to register moves might not be 16-bit even if is_word_size is set to true.
-// this is because the s bit is also taken into consideration when deciding the immediate size with the cmp, sub and add
-// operations. The mov operation doesnt care about the s bit, that's why the implementation looks like this currently.
 pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool, memory_mode: MemoryModeEnum, mnemonic: &'static str, s_bit_set: bool) -> usize {
     match inst {
         InstructionType::RegisterMemory => {

@@ -13,11 +13,6 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     TODO:
     Conditional jumps, TEST SUPPORT for the added immediate to accumulator.
 
-    TODO: fix the instructions that have an explicit byte or word keyword. They don't seem to work correctly.
-    we currently get add bh, 34 when we should get add byte [bx], 34
-
-    The register and the immediate are incorrect.
-    The memory mode however seems to be incorrect.
 
 
     TODO: Why can't I use conditional breakpoints? It's really making debugging this painful.
@@ -95,7 +90,7 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
         }
     } else {
         if memory_mode == DirectMemoryOperation || memory_mode == RegisterMode
-            || inst == ImmediateToRegisterMemory
+            || inst == ImmediateToRegisterMemory && memory_mode != MemoryModeNoDisplacement
         {
             return match (rm_res, is_word_size) {
                 (0b_00_000_000, true) => "ax",
@@ -233,13 +228,23 @@ fn main() {
         // we actually do not have a REG register. the immediate value is always moved into the R/M register.
 
         if instruction == ImmediateToRegisterMemory {
-            /* TODO: ImmediateToRegisterMemory with a 16 bit memory mode is currently not right.
-                It also doesn't have the correct size in the instruction size determiner.
+            /*
+                TODO: ImmediateToRegisterMemory with a 16 bit memory mode is currently not right.
+                  It also doesn't have the correct size in the instruction size determiner.
+
+                TODO: fix the instructions that have an explicit byte or word keyword. They don't seem to work correctly.
+                  we currently get add byte [bh], 34 when we should get add byte [bx], 34
+                  [ why is bx bh? ]
+
+                The register is incorrect.
+                The memory mode however seems to be incorrect.
+                First byte: 10000000, second byte: 00000111
             */
             if !is_word_size {
                 // regardless of the s bit, everything here 8-bit immediate if w is set to 0.
                 let third_byte = binary_contents[i + 2];
                 reg_or_immediate = (third_byte as usize).to_string();
+
             } else { // is_word_size
                 let s_bit_is_set = first_byte & S_BIT_m as u8 == 0b00000010;
                 // MOV doesn't care about the s_bit. CMP, SUB, ADD do.
