@@ -239,8 +239,8 @@ fn main() {
                 // if w=1 and s=0 and mnemonic is sub/add/cmp, it's an 16-bit immediate.
                 match (mnemonic, s_bit_is_set) {
                     ("mov", _) | ("cmp", true) | ("add", false) | ("sub", false) => {
-                        // TODO: handle MemoryMode8Bit.
-                        if memory_mode == MemoryMode16Bit {
+                        // TODO: should we handle MemoryMode8Bit in the same branch?
+                        if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit {
                             // the immediate is guaranteed to be 16-bit because the s bit is set to 0 in this branch.
                             let fifth_byte = binary_contents[i + 4];
                             let sixth_byte = binary_contents[i + 5];
@@ -254,13 +254,14 @@ fn main() {
                         }
                     },
                     ("cmp", false) | ("add", true) | ("sub", true) => {
-                        // TODO: handle MemoryMode8Bit.
-                        if memory_mode == MemoryMode16Bit {
+                        // TODO: should we handle MemoryMode8Bit in the same branch?
+                        if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit {
                             // In this branch we guarantee that the s bit is not set. Therefore the immediate can not be a 16-bit value.
                             // With 16-bit memory mode operations the immediate is in the fifth and sixth bytes depending on the size.
                             let fifth_byte = binary_contents[i + 4];
                             reg_or_immediate = (fifth_byte as usize).to_string();
-                        } else {
+                        }
+                        else {
                             let third_byte = binary_contents[i + 2];
                             reg_or_immediate = (third_byte as usize).to_string();
                         }
