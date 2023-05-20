@@ -18,6 +18,8 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     TODO: Why can't I use conditional breakpoints? It's really making debugging this painful.
     https://github.com/intellij-rust/intellij-rust/issues/10486
 
+    TODO:
+      Handle CMPs
 
  */
 
@@ -394,6 +396,6 @@ fn main() {
         }
         instruction_count += 1;
         i += instruction_size;
-        // print!("size: {}, count: {} - ", instruction_size, instruction_count);
+        print!("size: {}, count: {} - ", instruction_size, instruction_count);
     }
 }
