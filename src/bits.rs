@@ -218,7 +218,6 @@ pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool
             }
         }
         InstructionType::ImmediateToRegisterMemory => {
-            // TODO: Is this correct? We are currently running into the wrong increments.
             if mnemonic == "mov" {
                 if is_word_size {
                     return 4;

@@ -10,28 +10,19 @@ use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 
 /*
-
-    TODO: [Listing0041] - we have to take into consideration the s bit in the first byte.
-
-    Anywhere where we are handling immediate to register moves, we have to handle the s bit
-    if the instruction uses the sub, add or cmp mnemonics. This is because to know if the
-    immediate data is 16 or 8-bit, we have to look at both the s and w bits.
-
-    requirements for 16-bit data:
-    MOV - w=1
-    ADD - s:w=01
-    SUB - s:w=01
-    CMP - s:w=1 *Both bits to 1?*
-
-
     TODO:
     Conditional jumps, TEST SUPPORT for the added immediate to accumulator.
 
-    FIXME: In the listing_0041, the third instruction should be add si, 2 but instead it's add si, 197.
-    It's however doing what it's supposed to do but the increments are not correct.
-    It results in the decoder using the wrong byte as the immediate.
+    TODO: fix the instructions that have an explicit byte or word keyword. They don't seem to work correctly.
+    we currently get add bh, 34 when we should get add byte [bx], 34
 
-    FIXME: In the beginning, we only see 1 immediate to register add operations but we should see 3 in the start.
+    The register and the immediate are incorrect.
+    The memory mode however seems to be incorrect.
+
+
+    TODO: Why can't I use conditional breakpoints? It's really making debugging this painful.
+    https://github.com/intellij-rust/intellij-rust/issues/10486
+
  */
 
 
@@ -102,7 +93,7 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
             (0b_00_000_111, false) => "bh",
             _ => panic!("Did not expect us to get here. first_byte: {}, second_byte: {}, inst: {:?}", first_byte, second_byte, inst)
         }
-    } else{
+    } else {
         if memory_mode == DirectMemoryOperation || memory_mode == RegisterMode
             || inst == ImmediateToRegisterMemory
         {
@@ -242,10 +233,13 @@ fn main() {
         // we actually do not have a REG register. the immediate value is always moved into the R/M register.
 
         if instruction == ImmediateToRegisterMemory {
+            /* TODO: ImmediateToRegisterMemory with a 16 bit memory mode is currently not right.
+                It also doesn't have the correct size in the instruction size determiner.
+            */
             if !is_word_size {
                 // regardless of the s bit, everything here 8-bit immediate if w is set to 0.
-                let fifth_byte = binary_contents[i + 4];
-                reg_or_immediate = (fifth_byte as usize).to_string();
+                let third_byte = binary_contents[i + 2];
+                reg_or_immediate = (third_byte as usize).to_string();
             } else { // is_word_size
                 let s_bit_is_set = first_byte & S_BIT_m as u8 == 0b00000010;
                 // MOV doesn't care about the s_bit. CMP, SUB, ADD do.
@@ -253,9 +247,9 @@ fn main() {
                 // if w=1 and s=0 and mnemonic is sub/add/cmp, it's an 16-bit immediate.
                 match (mnemonic, s_bit_is_set) {
                     ("mov", _) | ("cmp", true) | ("add", false) | ("sub", false) => {
-                        let fifth_byte = binary_contents[i + 4];
-                        let sixth_byte = binary_contents[i + 5];
-                        let combined = combine_bytes(sixth_byte, fifth_byte);
+                        let third_byte = binary_contents[i + 2];
+                        let fourth_byte = binary_contents[i + 3];
+                        let combined = combine_bytes(fourth_byte, third_byte);
                         reg_or_immediate = (combined as usize).to_string();
                     },
                     ("cmp", false) | ("add", true) | ("sub", true) => {
@@ -263,8 +257,8 @@ fn main() {
                         // TODO: this leads to the immediate being 197, when it should be 2.
                         // it's doing what it's supposed to do, but I believe that the index is getting incremented incorrectly.
                         // leading into the wrong byte being read.
-                        let fifth_byte = binary_contents[i + 2];
-                        reg_or_immediate = (fifth_byte as usize).to_string();
+                        let third_byte = binary_contents[i + 2];
+                        reg_or_immediate = (third_byte as usize).to_string();
                     }
                     _ => panic!("Unknown (mnemonic, s_bit_is_set): ({}, {})", mnemonic, s_bit_is_set)
                 }
@@ -307,6 +301,14 @@ fn main() {
 
         if instruction == ImmediateToRegisterMemory {
             // println!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
+            if memory_mode == MemoryModeNoDisplacement || memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit {
+                if is_word_size {
+                    println!("{} word {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
+                } else {
+                    println!("{} byte {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
+                }
+                // println!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
+            }
             println!("Immediate value: {} | R/M: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte, i, is_word_size);
         } else if instruction == ImmediateToRegisterMOV {
             // println!("{} {}, {}", mnemonic, reg_or_immediate, rm_or_immediate);
