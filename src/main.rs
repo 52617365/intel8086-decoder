@@ -1,5 +1,4 @@
 mod bits;
-mod operation;
 use bits::*;
 
 use core::panic;
@@ -11,17 +10,12 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
 
 /*
     TODO:
-    Conditional jumps, TEST SUPPORT for the added immediate to accumulator.
+    Conditional jumps
 
 
 
     TODO: Why can't I use conditional breakpoints? It's really making debugging this painful.
     https://github.com/intellij-rust/intellij-rust/issues/10486
-
-    TODO:
-      We expect: cmp ax, 1000
-      We get:    cmp ax, 232
-      first byte: 00111101, second byte: 11101000
 
  */
 
@@ -215,9 +209,6 @@ fn main() {
     let mut i: usize = 0;
     let mut instruction_count: usize = 1;
     while i < binary_contents.len() {
-        // if instruction_count == 70 {
-        //     println!()
-        // }
         let first_byte = binary_contents[i];
         let second_byte = binary_contents[i + 1];
 
@@ -253,10 +244,6 @@ fn main() {
                             let sixth_byte = binary_contents[i + 5];
                             let combined = combine_bytes(sixth_byte, fifth_byte);
                             reg_or_immediate = (combined as usize).to_string();
-                        // }
-                        // else if memory_mode == RegisterMode {
-                        //     let third_byte = binary_contents[i + 2];
-                        //     reg_or_immediate = (third_byte as usize).to_string();
                         } else {
                             let third_byte = binary_contents[i + 2];
                             let fourth_byte = binary_contents[i + 3];
@@ -342,7 +329,6 @@ fn main() {
                 let first_disp = binary_contents[i + 2];
                 let second_disp = binary_contents[i + 3];
                 let displacement = combine_bytes(second_disp, first_disp);
-                // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
                 if is_word_size {
                     // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
                     if reg_is_dest {
