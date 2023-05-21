@@ -18,17 +18,6 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     TODO: Why can't I use conditional breakpoints? It's really making debugging this painful.
     https://github.com/intellij-rust/intellij-rust/issues/10486
 
-    TODO:
-      Handle CMPs
-
-      TODO: (FIXED BUT I DON'T ACTUALLY UNDERSTAND IF THE FIX WAS GOOD, INVESTIGATE AND DELETE TODO LATER:
-        We get:    cmp si, 33538
-        We expect: cmp si, 2
-        first byte:  10000011
-        second byte: 11111110
-
-    TODO:
-      Our decoder currently does not recognize cmp bp, 2 at all.
  */
 
 
