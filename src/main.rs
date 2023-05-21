@@ -21,6 +21,8 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     TODO:
       We expect: cmp ax, 1000
       We get:    cmp ax, 232
+      first byte: 00111101, second byte: 11101000
+
  */
 
 
@@ -213,6 +215,9 @@ fn main() {
     let mut i: usize = 0;
     let mut instruction_count: usize = 1;
     while i < binary_contents.len() {
+        // if instruction_count == 70 {
+        //     println!()
+        // }
         let first_byte = binary_contents[i];
         let second_byte = binary_contents[i + 1];
 
@@ -275,7 +280,7 @@ fn main() {
                     _ => panic!("Unknown (mnemonic, s_bit_is_set): ({}, {})", mnemonic, is_s_bit_set)
                 }
             }
-        } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB{
+        } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB || instruction == ImmediateToAccumulatorCMP{
             if is_word_size {
                 let third_byte = binary_contents[i + 2];
                 let combined = combine_bytes(third_byte, second_byte);
@@ -283,9 +288,6 @@ fn main() {
             } else {
                 reg_or_immediate = (second_byte as usize).to_string();
             }
-        }
-        else if instruction == ImmediateToAccumulatorCMP { // this instruction for some reason is always 2 bytes only.
-            reg_or_immediate = (second_byte as usize).to_string();
         }
         else {
             // In this case its actually not an immediate, instead the string gets populated with the reg register.
@@ -424,6 +426,6 @@ fn main() {
         }
         instruction_count += 1;
         i += instruction_size;
-        // print!("size: {}, count: {} - ", instruction_size, instruction_count);
+        print!("size: {}, count: {} - ", instruction_size, instruction_count);
     }
 }

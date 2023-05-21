@@ -248,13 +248,12 @@ pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool
                 panic!("Unknown mnemonic, we could not handle it. instruction type: {:?}, mnemonic: {}", inst, mnemonic)
             }
         }
-        InstructionType::ImmediateToRegisterMOV | InstructionType::ImmediateToAccumulatorSUB | InstructionType::ImmediateToAccumulatorADD => {
+        InstructionType::ImmediateToRegisterMOV | InstructionType::ImmediateToAccumulatorSUB | InstructionType::ImmediateToAccumulatorADD  | InstructionType::ImmediateToAccumulatorCMP => {
             if is_word_size {
                 return 3;
             } else {
                 return 2;
             }
         }
-        InstructionType::ImmediateToAccumulatorCMP => return 2
     }
 }
