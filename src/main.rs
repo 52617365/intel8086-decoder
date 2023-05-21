@@ -233,7 +233,6 @@ fn main() {
                 reg_or_immediate = (third_byte as usize).to_string();
             } else { // is_word_size
                 // MOV doesn't care about the s_bit. CMP, SUB, ADD do.
-                // if w=1 and s=1 and mnemonic is cmp, it's an 16-bit immediate.
                 // if w=1 and s=0 and mnemonic is sub/add/cmp, it's an 16-bit immediate.
                 match (mnemonic, is_s_bit_set) {
                     ("mov", _) | ("cmp", false) | ("add", false) | ("sub", false) => {
