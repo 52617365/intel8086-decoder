@@ -18,6 +18,12 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     TODO: Why can't I use conditional breakpoints? It's really making debugging this painful.
     https://github.com/intellij-rust/intellij-rust/issues/10486
 
+    TODO:
+      cmp word [4834], 29 is currently not handled at all. Fails in determine_instruction().
+      first byte:  00010010 <- not supported.
+      second byte: 00111110
+
+      This means that immediate to direct memory address is currently not supported.
  */
 
 
@@ -210,6 +216,9 @@ fn main() {
     let mut i: usize = 0;
     let mut instruction_count: usize = 1;
     while i < binary_contents.len() {
+        if instruction_count == 65 {
+            println!("hello");
+        }
         let first_byte = binary_contents[i];
         let second_byte = binary_contents[i + 1];
 
