@@ -19,11 +19,8 @@ use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, Memory
     https://github.com/intellij-rust/intellij-rust/issues/10486
 
     TODO:
-      cmp word [4834], 29 is currently not handled at all. Fails in determine_instruction().
-      first byte:  00010010 <- not supported.
-      second byte: 00111110
-
-      This means that immediate to direct memory address is currently not supported.
+      We expect: cmp ax, 1000
+      We get:    cmp ax, 232
  */
 
 
@@ -216,9 +213,6 @@ fn main() {
     let mut i: usize = 0;
     let mut instruction_count: usize = 1;
     while i < binary_contents.len() {
-        if instruction_count == 65 {
-            println!("hello");
-        }
         let first_byte = binary_contents[i];
         let second_byte = binary_contents[i + 1];
 
@@ -239,7 +233,6 @@ fn main() {
         if instruction == ImmediateToRegisterMemory {
             if !is_word_size {
                 // TODO: Do we have to handle 8 and 16-bit memory modes here in its own branch?
-                // regardless of the s bit, everything here 8-bit immediate if w is set to 0.
                 let third_byte = binary_contents[i + 2];
                 reg_or_immediate = (third_byte as usize).to_string();
             } else { // is_word_size
@@ -247,18 +240,18 @@ fn main() {
                 // if w=1 and s=1 and mnemonic is cmp, it's an 16-bit immediate.
                 // if w=1 and s=0 and mnemonic is sub/add/cmp, it's an 16-bit immediate.
                 match (mnemonic, is_s_bit_set) {
-                    ("mov", _) | ("cmp", true) | ("add", false) | ("sub", false) => {
+                    ("mov", _) | ("cmp", false) | ("add", false) | ("sub", false) => {
                         // TODO: should we handle MemoryMode8Bit in the same branch?
-                        if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit {
+                        if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit || memory_mode == DirectMemoryOperation {
                             // the immediate is guaranteed to be 16-bit because the s bit is set to 0 in this branch.
                             let fifth_byte = binary_contents[i + 4];
                             let sixth_byte = binary_contents[i + 5];
                             let combined = combine_bytes(sixth_byte, fifth_byte);
                             reg_or_immediate = (combined as usize).to_string();
-                        }
-                        else if memory_mode == RegisterMode {
-                            let third_byte = binary_contents[i + 2];
-                            reg_or_immediate = (third_byte as usize).to_string();
+                        // }
+                        // else if memory_mode == RegisterMode {
+                        //     let third_byte = binary_contents[i + 2];
+                        //     reg_or_immediate = (third_byte as usize).to_string();
                         } else {
                             let third_byte = binary_contents[i + 2];
                             let fourth_byte = binary_contents[i + 3];
@@ -266,9 +259,9 @@ fn main() {
                             reg_or_immediate = (combined as usize).to_string();
                         }
                     },
-                    ("cmp", false) | ("add", true) | ("sub", true) => {
+                    ("cmp", true) | ("add", true) | ("sub", true) => {
                         // TODO: should we handle MemoryMode8Bit in the same branch?
-                        if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit {
+                        if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit || memory_mode == DirectMemoryOperation {
                             // In this branch we guarantee that the s bit is not set. Therefore the immediate can not be a 16-bit value.
                             // With 16-bit memory mode operations the immediate is in the fifth and sixth bytes depending on the size.
                             let fifth_byte = binary_contents[i + 4];
@@ -343,7 +336,29 @@ fn main() {
                 } else {
                     println!("{} byte [{} + {}], {}", mnemonic, rm_or_immediate, displacement as usize, reg_or_immediate);
                 }
-            } else if memory_mode == RegisterMode {
+            } else if memory_mode == DirectMemoryOperation {
+                let first_disp = binary_contents[i + 2];
+                let second_disp = binary_contents[i + 3];
+                let displacement = combine_bytes(second_disp, first_disp);
+                // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
+                if is_word_size {
+                    // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
+                    if reg_is_dest {
+                        println!("{} word [{}], {}", mnemonic, displacement, reg_or_immediate);
+                    } else {
+                        println!("{} word {}, [{}]", mnemonic, reg_or_immediate, displacement);
+                    }
+                } else {
+                    // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
+                    if reg_is_dest {
+                        // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
+                        println!("{} byte [{}], {}", mnemonic, reg_or_immediate, displacement);
+                    } else {
+                        println!("{} byte {}, [{}]", mnemonic, displacement, reg_or_immediate);
+                    }
+                }
+            }
+            else if memory_mode == RegisterMode {
                 if reg_is_dest {
                     println!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
                 } else {
@@ -393,10 +408,13 @@ fn main() {
                     println!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate)
                 }
             } else if memory_mode == DirectMemoryOperation {
+                let first_disp = binary_contents[i + 2];
+                let second_disp = binary_contents[i + 3];
+                let disp = combine_bytes(second_disp, first_disp);
                 if reg_is_dest {
-                    println!("{} {}, [{}]", mnemonic, reg_or_immediate, rm_or_immediate)
+                    println!("{} {}, [{}]", mnemonic, disp, rm_or_immediate)
                 } else {
-                    println!("{} [{}], {}", mnemonic, rm_or_immediate, reg_or_immediate)
+                    println!("{} {}, [{}]", mnemonic, rm_or_immediate, disp)
                 }
             }
         }
@@ -406,6 +424,6 @@ fn main() {
         }
         instruction_count += 1;
         i += instruction_size;
-        print!("size: {}, count: {} - ", instruction_size, instruction_count);
+        // print!("size: {}, count: {} - ", instruction_size, instruction_count);
     }
 }

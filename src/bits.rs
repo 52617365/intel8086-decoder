@@ -213,8 +213,9 @@ pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool
             }
         }
         InstructionType::ImmediateToRegisterMemory => {
+            // TODO: handle direct memory operation.
             if mnemonic == "mov" {
-                if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
+                if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation { // TODO does DirectMemoryOperation belong here?
                     if is_word_size {
                         return 6;
                     } else {
@@ -230,7 +231,7 @@ pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool
             } else if mnemonic == "add" || mnemonic == "sub" || mnemonic == "cmp" {
                 // add is 01 sw for 16-bit
                 // this means that s bit has to be set to 0 if w is 1 for it to be 6 bytes wide.
-                if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
+                if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation { // TODO does DirectMemoryOperation belong here?
                     if is_word_size && !s_bit_set {
                         return 6;
                     } else {
