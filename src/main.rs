@@ -3,17 +3,12 @@ use bits::*;
 
 use core::panic;
 use std::{env, fs};
-use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumulatorCMP, ImmediateToRegisterMemory, ImmediateToRegisterMOV, ImmediateToAccumulatorSUB, RegisterMemory};
+use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumulatorCMP, ImmediateToRegisterMemory, ImmediateToRegisterMOV, ImmediateToAccumulatorSUB, RegisterMemory, JE_JUMP, JL_JUMP, JLE_JUMP, JB_JUMP, JBE_JUMP, JP_JUMP, JO_JUMP, JS_JUMP, JNE_JUMP, JNL_JUMP, LOOP, LOOPZ, JCXZ, LOOPNZ, JNS, JNO_JUMP, JNBE_JUMP, JNP_JUMP, JNB_JUMP, JNLE_JUMP};
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 
 /*
-    TODO:
-    Conditional jumps
-
-
-
     TODO: Why can't I use conditional breakpoints? It's really making debugging this painful.
     https://github.com/intellij-rust/intellij-rust/issues/10486
 
@@ -166,6 +161,67 @@ fn get_mnemonic(first_byte: u8, second_byte: u8, inst: InstructionType) -> &'sta
     // We need this to determine the mnemonic for immediate to register moves.
     let reg_field = second_byte & Masks::REG_BITS as u8;
 
+    if inst == JE_JUMP {
+        return "je"
+    }
+    if inst == JL_JUMP {
+        return "jl"
+    }
+    if inst == JLE_JUMP {
+        return "jle"
+    }
+    if inst == JB_JUMP {
+        return "jb"
+    }
+    if inst == JBE_JUMP {
+        return "jbe"
+    }
+    if inst == JP_JUMP {
+        return "jp"
+    }
+    if inst == JO_JUMP {
+        return "jo"
+    }
+    if inst == JS_JUMP {
+        return "js"
+    }
+    if inst == JNE_JUMP {
+        return "jnz"
+    }
+    if inst == JNL_JUMP {
+        return "jnl"
+    }
+    if inst == JNLE_JUMP {
+        return "jg"
+    }
+    if inst == JNB_JUMP {
+        return "jnb"
+    }
+    if inst == JNBE_JUMP {
+        return "ja"
+    }
+    if inst == JNP_JUMP {
+        return "jnp"
+    }
+    if inst == JNO_JUMP {
+        return "jno"
+    }
+    if inst == JNS {
+        return "jns"
+    }
+    if inst == LOOP {
+        return "loop"
+    }
+    if inst == LOOPZ {
+        return "loopz"
+    }
+    if inst == LOOPNZ {
+        return "loopnz"
+    }
+    if inst == JCXZ {
+        return "jcxz"
+    }
+
     if inst == ImmediateToRegisterMOV {
         return "mov"
     }
@@ -236,7 +292,6 @@ fn main() {
                 // if w=1 and s=0 and mnemonic is sub/add/cmp, it's an 16-bit immediate.
                 match (mnemonic, is_s_bit_set) {
                     ("mov", _) | ("cmp", false) | ("add", false) | ("sub", false) => {
-                        // TODO: should we handle MemoryMode8Bit in the same branch?
                         if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit || memory_mode == DirectMemoryOperation {
                             // the immediate is guaranteed to be 16-bit because the s bit is set to 0 in this branch.
                             let fifth_byte = binary_contents[i + 4];
@@ -251,7 +306,6 @@ fn main() {
                         }
                     },
                     ("cmp", true) | ("add", true) | ("sub", true) => {
-                        // TODO: should we handle MemoryMode8Bit in the same branch?
                         if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit || memory_mode == DirectMemoryOperation {
                             // In this branch we guarantee that the s bit is not set. Therefore the immediate can not be a 16-bit value.
                             // With 16-bit memory mode operations the immediate is in the fifth and sixth bytes depending on the size.
@@ -354,8 +408,8 @@ fn main() {
             }
             // println!("Immediate value: {} | R/M: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", reg_or_immediate, rm_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte, i, is_word_size);
         } else if instruction == ImmediateToRegisterMOV {
-            // println!("{} {}, {}", mnemonic, reg_or_immediate, rm_or_immediate);
-            println!("Immediate value: {} | REG: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", rm_or_immediate, reg_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte, i, is_word_size);
+            println!("{} {}, {}", mnemonic, reg_or_immediate, rm_or_immediate);
+            // println!("Immediate value: {} | REG: {} | instruction: {:?} | memory_mode: {:?} | instruction_count: {} | first_byte: {:08b} | second_byte: {:08b} | index: {} | is_word_size: {}", rm_or_immediate, reg_or_immediate, instruction, memory_mode, instruction_count, first_byte, second_byte, i, is_word_size);
         } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB || instruction == ImmediateToAccumulatorCMP {
 
             // NOTE!!!!: with the ImmediateToAccumulator operations, the registers are not specified in the bits,
@@ -405,12 +459,36 @@ fn main() {
                 }
             }
         }
+        else if instruction == JE_JUMP
+            || instruction == JL_JUMP
+            || instruction == JLE_JUMP
+            || instruction == JB_JUMP
+            || instruction == JBE_JUMP
+            || instruction == JP_JUMP
+            || instruction == JO_JUMP
+            || instruction == JS_JUMP
+            || instruction == JNE_JUMP
+            || instruction == JNL_JUMP
+            || instruction == JNLE_JUMP
+            || instruction == JNB_JUMP
+            || instruction == JNBE_JUMP
+            || instruction == JNP_JUMP
+            || instruction == JNO_JUMP
+            || instruction == JNS
+            || instruction == LOOP
+            || instruction == LOOPZ
+            || instruction == LOOPNZ
+            || instruction == JCXZ
+        {
+            // println!("{} {}", mnemonic, second_byte as usize);
+            println!("{} {}", mnemonic, "label");
+        }
         else
         {
             panic!("Unknown instruction: {:?}, did not expect to get here.", instruction);
         }
         instruction_count += 1;
         i += instruction_size;
-        print!("size: {}, count: {} - ", instruction_size, instruction_count);
+        // print!("size: {}, count: {} - ", instruction_size, instruction_count);
     }
 }

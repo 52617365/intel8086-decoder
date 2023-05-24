@@ -25,6 +25,26 @@ pub enum InstructionType {
     ImmediateToAccumulatorADD,
     ImmediateToAccumulatorSUB,
     ImmediateToAccumulatorCMP,
+    JE_JUMP,
+    JL_JUMP,
+    JLE_JUMP,
+    JB_JUMP,
+    JBE_JUMP,
+    JP_JUMP,
+    JO_JUMP,
+    JS_JUMP,
+    JNE_JUMP,
+    JNL_JUMP,
+    JNLE_JUMP,
+    JNB_JUMP,
+    JNBE_JUMP,
+    JNP_JUMP,
+    JNO_JUMP,
+    JNS,
+    LOOP,
+    LOOPZ,
+    LOOPNZ,
+    JCXZ,
 }
 
 
@@ -64,7 +84,8 @@ const IMMEDIATE_TO_ACCUMULATOR_SUB_ID: [u8; 2] = [
 const IMMEDIATE_TO_ACCUMULATOR_CMP_ID: [u8; 2] = [
     0b00111100, 0b00111101
 ];
-//
+
+// NOTE: Jumps have a 8 bit displacement in the second byte.
 
 pub struct OpCode {
     bit_pattern: u8,
@@ -79,7 +100,8 @@ pub struct OpCode {
 pub fn construct_opcodes() -> Vec<OpCode> {
     let elements_size: usize = REGISTER_MEMORY_OPERATION.len()
         + IMMEDIATE_TO_REGISTER_OR_MEMORY_ID.len()
-        + IMMEDIATE_TO_REGISTER_MOV_ID.len();
+        + IMMEDIATE_TO_REGISTER_MOV_ID.len()
+        + 15; // 15 = jumps
     let mut op_codes: Vec<OpCode> = Vec::with_capacity(elements_size);
 
     for reg_memory in REGISTER_MEMORY_OPERATION {
@@ -129,9 +151,30 @@ pub fn construct_opcodes() -> Vec<OpCode> {
         };
         op_codes.push(op_code)
     }
+    op_codes.push(OpCode{bit_pattern: 0b01110100, t: InstructionType::JE_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01111100, t: InstructionType::JL_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01111110, t: InstructionType::JLE_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01110010, t: InstructionType::JB_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01110110, t: InstructionType::JBE_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01111010, t: InstructionType::JP_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01110000, t: InstructionType::JO_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01111000, t: InstructionType::JS_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01110101, t: InstructionType::JNE_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01111101, t: InstructionType::JNL_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01111111, t: InstructionType::JNLE_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01110011, t: InstructionType::JNB_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01110111, t: InstructionType::JNBE_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01111011, t: InstructionType::JNP_JUMP});
+    op_codes.push(OpCode{bit_pattern: 0b01110001, t: InstructionType::JNO_JUMP});
+    // Loop stuff
+    op_codes.push(OpCode{bit_pattern: 0b01111001, t: InstructionType::JNS});
+    op_codes.push(OpCode{bit_pattern: 0b11100010, t: InstructionType::LOOP});
+    op_codes.push(OpCode{bit_pattern: 0b11100001, t: InstructionType::LOOPZ});
+    op_codes.push(OpCode{bit_pattern: 0b11100000, t: InstructionType::LOOPNZ});
+    op_codes.push(OpCode{bit_pattern: 0b11100011, t: InstructionType::JCXZ});
+
     op_codes
 }
-
 // We need to call this function because the different instructions are handled
 // in different ways.
 pub fn determine_instruction(op_codes: &Vec<OpCode>, first_byte: u8) -> InstructionType {
@@ -140,6 +183,7 @@ pub fn determine_instruction(op_codes: &Vec<OpCode>, first_byte: u8) -> Instruct
             return op_code.t.clone();
         }
     }
+
     panic!("unsupported operation, first_byte: {:08b}", first_byte);
 }
 
@@ -254,6 +298,28 @@ pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool
             } else {
                 return 2;
             }
+        },
+        InstructionType::JE_JUMP
+        | InstructionType::JL_JUMP
+        | InstructionType::JLE_JUMP
+        | InstructionType::JB_JUMP
+        | InstructionType::JBE_JUMP
+        | InstructionType::JP_JUMP
+        | InstructionType::JO_JUMP
+        | InstructionType::JS_JUMP
+        | InstructionType::JNE_JUMP
+        | InstructionType::JNL_JUMP
+        | InstructionType::JNLE_JUMP
+        | InstructionType::JNB_JUMP
+        | InstructionType::JNBE_JUMP
+        | InstructionType::JNP_JUMP
+        | InstructionType::JNO_JUMP
+        | InstructionType::JNS
+        | InstructionType::LOOP
+        | InstructionType::LOOPZ
+        | InstructionType::LOOPNZ
+        | InstructionType::JCXZ => {
+            return 2
         }
     }
 }
