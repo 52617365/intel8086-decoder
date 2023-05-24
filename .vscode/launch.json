@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/target/debug/assembler_8086",
             "args": [
-                "C:\\Users\\rase\\dev\\assembler_8086\\computer_enhance\\perfaware\\part1\\listing_0041_add_sub_cmp_jnz"
+                "C:\\Users\\rase\\dev\\assembler_8086\\computer_enhance\\perfaware\\part1\\listing_0039_more_movs"
             ],
             "cwd": "${workspaceFolder}",
             "sourceLanguages": [
