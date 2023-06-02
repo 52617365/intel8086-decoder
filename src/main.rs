@@ -1,4 +1,6 @@
 mod bits;
+mod registers;
+
 use bits::*;
 
 use core::panic;
@@ -251,14 +253,10 @@ fn get_mnemonic(first_byte: u8, second_byte: u8, inst: InstructionType) -> &'sta
     }
 }
 
-// TODO: Next we need to emulate the instructions, this means that we need to keep state of the values passed into the registers/memory locations.
-// it could possibly be wise to create a vector of structs that contain the register name, and the value associated with it.
-// we can then do a linear loop through the vector to see if the register we care about matches and get the value out that way.
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let binary_path = &args[1];
-    let binary_contents = fs::read(binary_path).unwrap();
+    let binary_path = &args[1];let binary_contents = fs::read(binary_path).unwrap();
     let op_codes = construct_opcodes();
 
     let mut i: usize = 0;
@@ -352,7 +350,7 @@ fn main() {
             rm_or_immediate = get_register(false, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
         }
 
-        let formatted_instruction = format_instruction(&binary_contents, i, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &mut reg_or_immediate, &mut rm_or_immediate);
+        let formatted_instruction = format_instruction(&binary_contents, i, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_or_immediate, &rm_or_immediate);
         println!("{}", formatted_instruction);
         instruction_count += 1;
         i += instruction_size;
@@ -360,7 +358,7 @@ fn main() {
     }
 }
 
-fn format_instruction(binary_contents: &Vec<u8>, i: usize, first_byte: u8, second_byte: u8, instruction: InstructionType, mnemonic: &str, is_word_size: bool, memory_mode: MemoryModeEnum, reg_is_dest: bool, reg_or_immediate: &mut String, rm_or_immediate: &mut String) -> String {
+fn format_instruction(binary_contents: &Vec<u8>, i: usize, first_byte: u8, second_byte: u8, instruction: InstructionType, mnemonic: &str, is_word_size: bool, memory_mode: MemoryModeEnum, reg_is_dest: bool, reg_or_immediate: &String, rm_or_immediate: &String) -> String {
     if instruction == ImmediateToRegisterMemory {
         if memory_mode == MemoryModeNoDisplacement {
             if is_word_size {
