@@ -11,7 +11,9 @@ struct Register {
 }
 
 // TODO: add all the possible registers in some constant array and then iterate over it in this function and construct a Register struct from each one, appending it to the vector.
-// This is done so that we can just then linearly search through the vector to find the register we care about and get the value out of it.
+// We then linearly search through the vector to find the register we care about and get the value out of it.
+// This is done so that we can keep a state of the value of the register.
+// we want to emulate the registers and their values during moves etc.
 pub fn construct_registers() -> Vec<Register>{
     // give me all possible 16 and 8 bit registers.
     let mut registers: Vec<Register> = Vec::with_capacity();
