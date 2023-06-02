@@ -251,6 +251,10 @@ fn get_mnemonic(first_byte: u8, second_byte: u8, inst: InstructionType) -> &'sta
     }
 }
 
+// TODO: Next we need to emulate the instructions, this means that we need to keep state of the values passed into the registers/memory locations.
+// it could possibly be wise to create a vector of structs that contain the register name, and the value associated with it.
+// we can then do a linear loop through the vector to see if the register we care about matches and get the value out that way.
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let binary_path = &args[1];
@@ -365,25 +369,21 @@ fn format_instruction(binary_contents: &Vec<u8>, i: usize, first_byte: u8, secon
                 return format!("{} byte [{}], {}", mnemonic, rm_or_immediate, reg_or_immediate);
             }
         } else if memory_mode == MemoryMode8Bit {
-            let first_disp = binary_contents[i + 2];
+            let displacement = get_8_bit_displacement(binary_contents, i);
             if is_word_size {
-                return format!("{} word [{} + {}], {}", mnemonic, rm_or_immediate, first_disp as usize, reg_or_immediate);
+                return format!("{} word [{} + {}], {}", mnemonic, rm_or_immediate, displacement, reg_or_immediate);
             } else {
-                return format!("{} byte [{} + {}], {}", mnemonic, rm_or_immediate, first_disp as usize, reg_or_immediate);
+                return format!("{} byte [{} + {}], {}", mnemonic, rm_or_immediate, displacement, reg_or_immediate);
             }
         } else if memory_mode == MemoryMode16Bit {
-            let first_disp = binary_contents[i + 2];
-            let second_disp = binary_contents[i + 3];
-            let displacement = combine_bytes(second_disp, first_disp);
+            let displacement = get_16_bit_displacement(binary_contents, i);
             if is_word_size {
-                return format!("{} word [{} + {}], {}", mnemonic, rm_or_immediate, displacement as usize, reg_or_immediate);
+                return format!("{} word [{} + {}], {}", mnemonic, rm_or_immediate, displacement, reg_or_immediate);
             } else {
-                return format!("{} byte [{} + {}], {}", mnemonic, rm_or_immediate, displacement as usize, reg_or_immediate);
+                return format!("{} byte [{} + {}], {}", mnemonic, rm_or_immediate, displacement, reg_or_immediate);
             }
         } else if memory_mode == DirectMemoryOperation {
-            let first_disp = binary_contents[i + 2];
-            let second_disp = binary_contents[i + 3];
-            let displacement = combine_bytes(second_disp, first_disp);
+            let displacement = get_16_bit_displacement(binary_contents, i);
             if is_word_size {
                 // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
                 if reg_is_dest {
@@ -428,20 +428,18 @@ fn format_instruction(binary_contents: &Vec<u8>, i: usize, first_byte: u8, secon
                 return format!("{} [{}], {}", mnemonic, rm_or_immediate, reg_or_immediate)
             }
         } else if memory_mode == MemoryMode8Bit {
-            let disp = binary_contents[i + 2] as usize;
+            let disp = get_8_bit_displacement(binary_contents, i);
             if reg_is_dest {
                 return format!("{} {}, [{} + {}]", mnemonic, reg_or_immediate, rm_or_immediate, disp)
             } else {
                 return format!("{} [{} + {}], {}", mnemonic, rm_or_immediate, disp, reg_or_immediate)
             }
         } else if memory_mode == MemoryMode16Bit {
-            let first_disp = binary_contents[i + 2];
-            let second_disp = binary_contents[i + 3];
-            let disp = combine_bytes(second_disp, first_disp);
+            let displacement = get_16_bit_displacement(binary_contents, i);
             if reg_is_dest {
-                return format!("{} {}, [{} + {}]", mnemonic, reg_or_immediate, rm_or_immediate, disp)
+                return format!("{} {}, [{} + {}]", mnemonic, reg_or_immediate, rm_or_immediate, displacement)
             } else {
-                return format!("{} [{} + {}], {}", mnemonic, rm_or_immediate, disp, reg_or_immediate)
+                return format!("{} [{} + {}], {}", mnemonic, rm_or_immediate, displacement, reg_or_immediate)
             }
         } else if memory_mode == RegisterMode {
             if reg_is_dest {
@@ -450,13 +448,11 @@ fn format_instruction(binary_contents: &Vec<u8>, i: usize, first_byte: u8, secon
                 return format!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate)
             }
         } else if memory_mode == DirectMemoryOperation {
-            let first_disp = binary_contents[i + 2];
-            let second_disp = binary_contents[i + 3];
-            let disp = combine_bytes(second_disp, first_disp);
+            let displacement = get_16_bit_displacement(binary_contents, i);
             if reg_is_dest {
-                return format!("{} {}, [{}]", mnemonic, disp, rm_or_immediate)
+                return format!("{} {}, [{}]", mnemonic, displacement, rm_or_immediate)
             } else {
-                return format!("{} {}, [{}]", mnemonic, rm_or_immediate, disp)
+                return format!("{} {}, [{}]", mnemonic, rm_or_immediate, displacement)
             }
         } else {
             panic!("Unknown memory mode: {:?}, did not expect to get here.", memory_mode);
@@ -486,4 +482,16 @@ fn format_instruction(binary_contents: &Vec<u8>, i: usize, first_byte: u8, secon
     } else {
         panic!("Unknown instruction: {:?}, did not expect to get here.", instruction);
     }
+}
+
+fn get_16_bit_displacement(binary_contents: &Vec<u8>, i: usize) -> usize {
+    let first_disp = binary_contents[i + 2];
+    let second_disp = binary_contents[i + 3];
+    let displacement = combine_bytes(second_disp, first_disp);
+    displacement as usize
+}
+
+fn get_8_bit_displacement(binary_contents: &Vec<u8>, i: usize) -> usize {
+    let first_disp = binary_contents[i + 2];
+    return first_disp as usize
 }
