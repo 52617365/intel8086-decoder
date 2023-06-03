@@ -47,7 +47,42 @@ pub enum InstructionType {
     JCXZ,
 }
 
+pub fn instruction_is_conditional_jump(instruction: InstructionType) -> bool {
+    match instruction {
+        InstructionType::JE_JUMP => true,
+        InstructionType::JL_JUMP => true,
+        InstructionType::JLE_JUMP => true,
+        InstructionType::JB_JUMP => true,
+        InstructionType::JBE_JUMP => true,
+        InstructionType::JP_JUMP => true,
+        InstructionType::JO_JUMP => true,
+        InstructionType::JS_JUMP => true,
+        InstructionType::JNE_JUMP => true,
+        InstructionType::JNL_JUMP => true,
+        InstructionType::JNLE_JUMP => true,
+        InstructionType::JNB_JUMP => true,
+        InstructionType::JNBE_JUMP => true,
+        InstructionType::JNP_JUMP => true,
+        InstructionType::JNO_JUMP => true,
+        InstructionType::JNS => true,
+        InstructionType::LOOP => true,
+        InstructionType::LOOPZ => true,
+        InstructionType::LOOPNZ => true,
+        InstructionType::JCXZ => true,
+        _ => false,
+    }
+}
 
+pub fn instruction_is_immediate_to_register(instruction: InstructionType) -> bool {
+    match instruction {
+        InstructionType::ImmediateToRegisterMemory => true,
+        InstructionType::ImmediateToRegisterMOV => true,
+        InstructionType::ImmediateToAccumulatorADD => true,
+        InstructionType::ImmediateToAccumulatorSUB => true,
+        InstructionType::ImmediateToAccumulatorCMP => true,
+        _ => false,
+    }
+}
 // OpCode exists because we want each bit to know which InstructionType it belongs to.
 // this is because we will be iterating and matching the bit patterns and if we match we want to
 // immediately know which instruction type it is.
