@@ -4,18 +4,48 @@
 // it could also have a field that is like og_value that gets updated each time the value gets changed.
 
 // we could construct this struct for each register at the start and then just iterate over the collection again and again.
-struct Register {
-    register: &'static str,
-    updated_value: u16,
-    original_value: u16,
+pub struct Register {
+   pub register: &'static str,
+   pub updated_value: &'static str,
+   pub original_value: &'static str,
 }
 
+
+const REGISTERS: [&str; 16] = [
+    "ax", "cx", "dx", "bx", "sp", "bp", "si", "di",
+    "al", "cl", "dl", "bl", "ah", "ch", "dh", "bh",
+];
 // TODO: add all the possible registers in some constant array and then iterate over it in this function and construct a Register struct from each one, appending it to the vector.
 // We then linearly search through the vector to find the register we care about and get the value out of it.
 // This is done so that we can keep a state of the value of the register.
 // we want to emulate the registers and their values during moves etc.
 pub fn construct_registers() -> Vec<Register>{
-    // give me all possible 16 and 8 bit registers.
-    let mut registers: Vec<Register> = Vec::with_capacity();
-    todo!()
+    let mut registers: Vec<Register> = Vec::with_capacity(REGISTERS.len());
+
+    for register in REGISTERS.iter() {
+        registers.push(Register {
+            register,
+            updated_value: "0",
+            original_value: "0",
+        });
+    }
+    return registers;
+}
+
+pub fn get_register_state<'a>(register: &String, registers: &Vec<Register>) -> &'a Register {
+    for reg in registers.iter() {
+        if reg.register == register {
+            return reg
+        }
+    }
+    panic!("Register not found, this should never happen. Register that was not found was {}", register);
+}
+
+pub fn update_register_value(register_to_update: &'static str, value: &'static str, registers: &mut Vec<Register>) -> () {
+    for reg in registers.iter_mut() {
+        if reg.register == register_to_update {
+            reg.updated_value = value;
+        }
+    }
+    panic!("Register not found, this should never happen. Register that was not found was {}", register_to_update);
 }
