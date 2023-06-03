@@ -9,7 +9,7 @@ use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumul
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
-
+use crate::registers::{construct_registers, get_register_state};
 
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
@@ -258,6 +258,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let binary_path = &args[1];let binary_contents = fs::read(binary_path).unwrap();
     let op_codes = construct_opcodes();
+    let registers = construct_registers();
 
     let mut i: usize = 0;
     let mut instruction_count: usize = 1;
@@ -273,8 +274,10 @@ fn main() {
         let instruction_size = determine_instruction_byte_size(instruction, is_word_size, memory_mode, mnemonic, is_s_bit_set);
         let reg_is_dest = first_byte & D_BITS as u8 != 0;
 
-        let mut reg_or_immediate = String::new();
-        let mut rm_or_immediate = String::new();
+        let mut reg_register = String::new();
+        let mut reg_immediate: usize = 0;
+        let mut rm_register = String::new();
+        let mut rm_immediate: usize = 0;
 
         // We are doing this if statement because in the case of an ImmediateToRegisterMemory (NON MOV one)
         // we actually do not have a REG register. the immediate value is always moved into the R/M register.
@@ -283,7 +286,7 @@ fn main() {
             if !is_word_size {
                 // TODO: Do we have to handle 8 and 16-bit memory modes here in its own branch?
                 let third_byte = binary_contents[i + 2];
-                reg_or_immediate = (third_byte as usize).to_string();
+                reg_immediate = third_byte as usize
             } else { // is_word_size
                 // MOV doesn't care about the s_bit. CMP, SUB, ADD do.
                 // if w=1 and s=0 and mnemonic is sub/add/cmp, it's an 16-bit immediate.
@@ -294,12 +297,12 @@ fn main() {
                             let fifth_byte = binary_contents[i + 4];
                             let sixth_byte = binary_contents[i + 5];
                             let combined = combine_bytes(sixth_byte, fifth_byte);
-                            reg_or_immediate = (combined as usize).to_string();
+                            reg_immediate = combined as usize
                         } else {
                             let third_byte = binary_contents[i + 2];
                             let fourth_byte = binary_contents[i + 3];
                             let combined = combine_bytes(fourth_byte, third_byte);
-                            reg_or_immediate = (combined as usize).to_string();
+                            reg_immediate = combined as usize
                         }
                     },
                     ("cmp", true) | ("add", true) | ("sub", true) => {
@@ -307,11 +310,11 @@ fn main() {
                             // In this branch we guarantee that the s bit is not set. Therefore the immediate can not be a 16-bit value.
                             // With 16-bit memory mode operations the immediate is in the fifth and sixth bytes depending on the size.
                             let fifth_byte = binary_contents[i + 4];
-                            reg_or_immediate = (fifth_byte as usize).to_string();
+                            reg_immediate = fifth_byte as usize;
                         }
                         else {
                             let third_byte = binary_contents[i + 2];
-                            reg_or_immediate = (third_byte as usize).to_string();
+                            reg_immediate = third_byte as usize
                         }
                     }
                     _ => panic!("Unknown (mnemonic, s_bit_is_set): ({}, {})", mnemonic, is_s_bit_set)
@@ -321,14 +324,14 @@ fn main() {
             if is_word_size {
                 let third_byte = binary_contents[i + 2];
                 let combined = combine_bytes(third_byte, second_byte);
-                reg_or_immediate = (combined as usize).to_string();
+                reg_immediate = combined as usize
             } else {
-                reg_or_immediate = (second_byte as usize).to_string();
+                reg_immediate = second_byte as usize
             }
         }
         else {
             // In this case its actually not an immediate, instead the string gets populated with the reg register.
-            reg_or_immediate = get_register(true, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
+            reg_register = get_register(true, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
         }
 
         // This case is actually the complete opposite from the previous one.
@@ -341,19 +344,33 @@ fn main() {
             if is_word_size {
                 let third_byte = binary_contents[i + 2];
                 let combined = combine_bytes(third_byte, second_byte);
-                rm_or_immediate = (combined as usize).to_string();
+                rm_immediate = combined as usize
             } else {
-                rm_or_immediate = (second_byte as usize).to_string();
+                rm_immediate = second_byte as usize
             }
         } else {
             // In this case its actually not an immediate, instead the string gets populated with the R/M register.
-            rm_or_immediate = get_register(false, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
+            rm_register = get_register(false, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
         }
 
         let formatted_instruction = format_instruction(&binary_contents, i, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_or_immediate, &rm_or_immediate);
         println!("{}", formatted_instruction);
         instruction_count += 1;
         i += instruction_size;
+
+        if reg_is_dest {
+            let reg_value = get_register_state(&reg_or_immediate, &registers);
+            if instruction_is_immediate_to_register(instruction) {
+                // in this branch we can just update the value with the immediate.
+                reg_value.updated_value = rm_or_immediate;
+            } else if instruction_is_conditional_jump(instruction) {
+
+            }
+            // TODO: if operation is immediate to register, instead of looping over the registers, we can just update the value with the immediate value.
+
+        } else {
+
+        }
         // print!("size: {}, count: {} - ", instruction_size, instruction_count);
     }
 }
