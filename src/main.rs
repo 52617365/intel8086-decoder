@@ -353,79 +353,79 @@ fn main() {
             rm_register = get_register(false, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
         }
 
-        let formatted_instruction = format_instruction(&binary_contents, i, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_or_immediate, &rm_or_immediate);
+        let formatted_instruction = format_instruction(&binary_contents, i, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
         println!("{}", formatted_instruction);
         instruction_count += 1;
         i += instruction_size;
 
-        if reg_is_dest {
-            let reg_value = get_register_state(&reg_or_immediate, &registers);
-            if instruction_is_immediate_to_register(instruction) {
-                // in this branch we can just update the value with the immediate.
-                reg_value.updated_value = rm_or_immediate;
-            } else if instruction_is_conditional_jump(instruction) {
-
-            }
-            // TODO: if operation is immediate to register, instead of looping over the registers, we can just update the value with the immediate value.
-
-        } else {
-
-        }
+        // if reg_is_dest {
+        //     let reg_value = get_register_state(&reg_or_immediate, &registers);
+        //     if instruction_is_immediate_to_register(instruction) {
+        //         // in this branch we can just update the value with the immediate.
+        //         reg_value.updated_value = rm_or_immediate;
+        //     } else if instruction_is_conditional_jump(instruction) {
+        //
+        //     }
+        //     // TODO: if operation is immediate to register, instead of looping over the registers, we can just update the value with the immediate value.
+        //
+        // } else {
+        //
+        // }
         // print!("size: {}, count: {} - ", instruction_size, instruction_count);
     }
 }
 
-fn format_instruction(binary_contents: &Vec<u8>, i: usize, first_byte: u8, second_byte: u8, instruction: InstructionType, mnemonic: &str, is_word_size: bool, memory_mode: MemoryModeEnum, reg_is_dest: bool, reg_or_immediate: &String, rm_or_immediate: &String) -> String {
+fn format_instruction(binary_contents: &Vec<u8>, i: usize, first_byte: u8, second_byte: u8, instruction: InstructionType, mnemonic: &str, is_word_size: bool, memory_mode: MemoryModeEnum, reg_is_dest: bool, reg_register: &String, rm_register: &String, reg_immediate: usize, rm_immediate: usize) -> String {
     if instruction == ImmediateToRegisterMemory {
         if memory_mode == MemoryModeNoDisplacement {
             if is_word_size {
-                return format!("{} word [{}], {}", mnemonic, rm_or_immediate, reg_or_immediate);
+                return format!("{} word [{}], {}", mnemonic, rm_register, reg_immediate);
             } else {
-                return format!("{} byte [{}], {}", mnemonic, rm_or_immediate, reg_or_immediate);
+                return format!("{} byte [{}], {}", mnemonic, rm_register, reg_immediate);
             }
         } else if memory_mode == MemoryMode8Bit {
             let displacement = get_8_bit_displacement(binary_contents, i);
             if is_word_size {
-                return format!("{} word [{} + {}], {}", mnemonic, rm_or_immediate, displacement, reg_or_immediate);
+                return format!("{} word [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate);
             } else {
-                return format!("{} byte [{} + {}], {}", mnemonic, rm_or_immediate, displacement, reg_or_immediate);
+                return format!("{} byte [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate);
             }
         } else if memory_mode == MemoryMode16Bit {
             let displacement = get_16_bit_displacement(binary_contents, i);
             if is_word_size {
-                return format!("{} word [{} + {}], {}", mnemonic, rm_or_immediate, displacement, reg_or_immediate);
+                return format!("{} word [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate);
             } else {
-                return format!("{} byte [{} + {}], {}", mnemonic, rm_or_immediate, displacement, reg_or_immediate);
+                return format!("{} byte [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate);
             }
         } else if memory_mode == DirectMemoryOperation {
             let displacement = get_16_bit_displacement(binary_contents, i);
             if is_word_size {
                 // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
                 if reg_is_dest {
-                    return format!("{} word [{}], {}", mnemonic, displacement, reg_or_immediate);
+                    return format!("{} word [{}], {}", mnemonic, displacement, reg_immediate); // TODO: is this reg_immediate or reg_register?
                 } else {
-                    return format!("{} word {}, [{}]", mnemonic, reg_or_immediate, displacement);
+                    return format!("{} word {}, [{}]", mnemonic, reg_immediate, displacement); // TODO: is this reg_immediate or reg_register?
                 }
             } else {
                 // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
                 if reg_is_dest {
                     // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
-                    return format!("{} byte [{}], {}", mnemonic, reg_or_immediate, displacement);
+                    return format!("{} byte [{}], {}", mnemonic, reg_immediate, displacement);
                 } else {
-                    return format!("{} byte {}, [{}]", mnemonic, displacement, reg_or_immediate);
+                    return format!("{} byte {}, [{}]", mnemonic, displacement, reg_immediate);
                 }
             }
         } else if memory_mode == RegisterMode {
             if reg_is_dest {
-                return format!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate);
+                return format!("{} {}, {}", mnemonic, rm_register, reg_immediate);
             } else {
-                return format!("{} {}, {}", mnemonic, reg_or_immediate, rm_or_immediate);
+                return format!("{} {}, {}", mnemonic, reg_immediate, rm_register); // TODO: is this reg_immediate or reg_register?
             }
         } else {
             panic!("Invalid memory mode {:?}.", memory_mode);
         }
     } else if instruction == ImmediateToRegisterMOV {
-        return format!("{} {}, {}", mnemonic, reg_or_immediate, rm_or_immediate);
+        return format!("{} {}, {}", mnemonic, reg_register, rm_immediate);
     } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB || instruction == ImmediateToAccumulatorCMP {
 
         // NOTE!!!!: with the ImmediateToAccumulator operations, the registers are not specified in the bits,
@@ -434,40 +434,40 @@ fn format_instruction(binary_contents: &Vec<u8>, i: usize, first_byte: u8, secon
         // this is because we don't want to make a new variable for just one operation. The name is misleading but live with it.
 
         let ax_or_al = get_register(true, instruction, memory_mode, first_byte, second_byte, is_word_size);
-        return format!("{} {}, {}", mnemonic, ax_or_al, reg_or_immediate);
+        return format!("{} {}, {}", mnemonic, ax_or_al, reg_immediate);
     } else if instruction == RegisterMemory {
         if memory_mode == MemoryModeNoDisplacement {
             if reg_is_dest {
-                return format!("{} {}, [{}]", mnemonic, reg_or_immediate, rm_or_immediate)
+                return format!("{} {}, [{}]", mnemonic, reg_register, rm_register)
             } else {
-                return format!("{} [{}], {}", mnemonic, rm_or_immediate, reg_or_immediate)
+                return format!("{} [{}], {}", mnemonic, rm_register, reg_register)
             }
         } else if memory_mode == MemoryMode8Bit {
             let disp = get_8_bit_displacement(binary_contents, i);
             if reg_is_dest {
-                return format!("{} {}, [{} + {}]", mnemonic, reg_or_immediate, rm_or_immediate, disp)
+                return format!("{} {}, [{} + {}]", mnemonic, reg_register, rm_register, disp)
             } else {
-                return format!("{} [{} + {}], {}", mnemonic, rm_or_immediate, disp, reg_or_immediate)
+                return format!("{} [{} + {}], {}", mnemonic, rm_register, disp, reg_register)
             }
         } else if memory_mode == MemoryMode16Bit {
             let displacement = get_16_bit_displacement(binary_contents, i);
             if reg_is_dest {
-                return format!("{} {}, [{} + {}]", mnemonic, reg_or_immediate, rm_or_immediate, displacement)
+                return format!("{} {}, [{} + {}]", mnemonic, reg_register, rm_register, displacement)
             } else {
-                return format!("{} [{} + {}], {}", mnemonic, rm_or_immediate, displacement, reg_or_immediate)
+                return format!("{} [{} + {}], {}", mnemonic, rm_register, displacement, reg_register)
             }
         } else if memory_mode == RegisterMode {
             if reg_is_dest {
-                return format!("{} {}, {}", mnemonic, reg_or_immediate, rm_or_immediate)
+                return format!("{} {}, {}", mnemonic, reg_register, rm_register)
             } else {
-                return format!("{} {}, {}", mnemonic, rm_or_immediate, reg_or_immediate)
+                return format!("{} {}, {}", mnemonic, rm_register, reg_register)
             }
         } else if memory_mode == DirectMemoryOperation {
             let displacement = get_16_bit_displacement(binary_contents, i);
             if reg_is_dest {
-                return format!("{} {}, [{}]", mnemonic, displacement, rm_or_immediate)
+                return format!("{} {}, [{}]", mnemonic, displacement, rm_register)
             } else {
-                return format!("{} {}, [{}]", mnemonic, rm_or_immediate, displacement)
+                return format!("{} {}, [{}]", mnemonic, rm_register, displacement)
             }
         } else {
             panic!("Unknown memory mode: {:?}, did not expect to get here.", memory_mode);

@@ -32,7 +32,7 @@ pub fn construct_registers() -> Vec<Register>{
     return registers;
 }
 
-pub fn get_register_state<'a>(register: &String, registers: &Vec<Register>) -> &'a Register {
+pub fn get_register_state<'a>(register: &String, registers: &'a Vec<Register>) -> &'a Register {
     for reg in registers.iter() {
         if reg.register == register {
             return reg
