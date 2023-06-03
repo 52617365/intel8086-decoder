@@ -402,9 +402,9 @@ fn format_instruction(binary_contents: &Vec<u8>, i: usize, first_byte: u8, secon
             if is_word_size {
                 // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
                 if reg_is_dest {
-                    return format!("{} word [{}], {}", mnemonic, displacement, reg_immediate); // TODO: is this reg_immediate or reg_register?
+                    return format!("{} word [{}], {}", mnemonic, displacement, reg_immediate);
                 } else {
-                    return format!("{} word {}, [{}]", mnemonic, reg_immediate, displacement); // TODO: is this reg_immediate or reg_register?
+                    return format!("{} word {}, [{}]", mnemonic, reg_immediate, displacement);
                 }
             } else {
                 // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
@@ -419,7 +419,7 @@ fn format_instruction(binary_contents: &Vec<u8>, i: usize, first_byte: u8, secon
             if reg_is_dest {
                 return format!("{} {}, {}", mnemonic, rm_register, reg_immediate);
             } else {
-                return format!("{} {}, {}", mnemonic, reg_immediate, rm_register); // TODO: is this reg_immediate or reg_register?
+                return format!("{} {}, {}", mnemonic, reg_immediate, rm_register);
             }
         } else {
             panic!("Invalid memory mode {:?}.", memory_mode);
