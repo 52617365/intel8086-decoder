@@ -9,7 +9,7 @@ use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumul
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
-use crate::registers::{construct_registers, get_register_state};
+use crate::registers::{construct_registers, get_register_state, update_original_register_value, update_register_value};
 
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
@@ -256,9 +256,10 @@ fn get_mnemonic(first_byte: u8, second_byte: u8, inst: InstructionType) -> &'sta
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let binary_path = &args[1];let binary_contents = fs::read(binary_path).unwrap();
+    let binary_path = &args[1];
+    let binary_contents = fs::read(binary_path).unwrap();
     let op_codes = construct_opcodes();
-    let registers = construct_registers();
+    let mut registers = construct_registers();
 
     let mut i: usize = 0;
     let mut instruction_count: usize = 1;
@@ -311,8 +312,7 @@ fn main() {
                             // With 16-bit memory mode operations the immediate is in the fifth and sixth bytes depending on the size.
                             let fifth_byte = binary_contents[i + 4];
                             reg_immediate = fifth_byte as usize;
-                        }
-                        else {
+                        } else {
                             let third_byte = binary_contents[i + 2];
                             reg_immediate = third_byte as usize
                         }
@@ -320,7 +320,7 @@ fn main() {
                     _ => panic!("Unknown (mnemonic, s_bit_is_set): ({}, {})", mnemonic, is_s_bit_set)
                 }
             }
-        } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB || instruction == ImmediateToAccumulatorCMP{
+        } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB || instruction == ImmediateToAccumulatorCMP {
             if is_word_size {
                 let third_byte = binary_contents[i + 2];
                 let combined = combine_bytes(third_byte, second_byte);
@@ -328,8 +328,7 @@ fn main() {
             } else {
                 reg_immediate = second_byte as usize
             }
-        }
-        else {
+        } else {
             // In this case its actually not an immediate, instead the string gets populated with the reg register.
             reg_register = get_register(true, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
         }
@@ -353,24 +352,52 @@ fn main() {
             rm_register = get_register(false, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
         }
 
+        if instruction_is_immediate_to_register(instruction) {
+            let reg = get_register_state(&reg_register, &registers);
+            if reg_is_dest || instruction == ImmediateToRegisterMOV {
+                // in this branch we can just update the value with the immediate.
+                // FIXME: do we want to pass the reg.register in here or can we somehow do it in a better way
+                update_register_value(reg.register, rm_immediate, &mut registers, instruction, memory_mode, mnemonic);
+            } else {
+                let rm = get_register_state(&rm_register, &registers);
+                // in this branch we can just update the value with the immediate.
+                update_register_value(rm.register, reg_immediate, &mut registers, instruction, memory_mode, mnemonic);
+            }
+        } else if instruction_is_conditional_jump(instruction) {
+            // Leaving this here in case we have to implement it later with instruction pointers.
+        } else {
+            let reg = get_register_state(&reg_register, &registers);
+            let rm = get_register_state(&rm_register, &registers);
+            if reg_is_dest {
+                update_register_value(reg.register, rm.updated_value, &mut registers, instruction, memory_mode, mnemonic);
+            } else {
+                let rm = get_register_state(&rm_register, &registers);
+                // in this branch we can just update the value with the immediate.
+                update_register_value(rm.register, reg.updated_value, &mut registers, instruction, memory_mode, mnemonic);
+            }
+        }
+
         let formatted_instruction = format_instruction(&binary_contents, i, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
-        println!("{}", formatted_instruction);
+
+        if reg_is_dest || instruction == ImmediateToRegisterMOV {
+            let reg = get_register_state(&reg_register, &registers);
+            println!("{} ; {} -> {}", formatted_instruction, reg.original_value, reg.updated_value);
+        } else {
+            let rm = get_register_state(&rm_register, &registers);
+            println!("{} ; {} -> {}", formatted_instruction, rm.original_value, rm.updated_value);
+        }
         instruction_count += 1;
         i += instruction_size;
 
-        // if reg_is_dest {
-        //     let reg_value = get_register_state(&reg_or_immediate, &registers);
-        //     if instruction_is_immediate_to_register(instruction) {
-        //         // in this branch we can just update the value with the immediate.
-        //         reg_value.updated_value = rm_or_immediate;
-        //     } else if instruction_is_conditional_jump(instruction) {
-        //
-        //     }
-        //     // TODO: if operation is immediate to register, instead of looping over the registers, we can just update the value with the immediate value.
-        //
-        // } else {
-        //
-        // }
+
+        // FIXME: this is kinda dumb, how do I do do this in a better way?
+        if reg_is_dest || instruction == ImmediateToRegisterMOV {
+            let reg = get_register_state(&reg_register, &registers);
+            update_original_register_value(reg.register, reg.updated_value, &mut registers);
+        } else {
+            let rm = get_register_state(&rm_register, &registers);
+            update_original_register_value(rm.register, rm.updated_value, &mut registers);
+        }
         // print!("size: {}, count: {} - ", instruction_size, instruction_count);
     }
 }
