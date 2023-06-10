@@ -13,7 +13,6 @@ pub struct Register {
    pub original_value: usize,
 }
 
-
 const REGISTERS: [&str; 16] = [
     "ax", "cx", "dx", "bx", "sp", "bp", "si", "di",
     "al", "cl", "dl", "bl", "ah", "ch", "dh", "bh",
