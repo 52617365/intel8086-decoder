@@ -1,5 +1,6 @@
 mod bits;
 mod registers;
+mod flag_registers;
 
 use bits::*;
 
@@ -10,6 +11,7 @@ use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 use crate::registers::{construct_registers, get_register_state, update_original_register_value, update_register_value};
+use crate::flag_registers::{construct_flag_registers, set_is_set_for_flag_register, set_flags, get_all_currently_set_flags};
 
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
@@ -260,6 +262,7 @@ fn main() {
     let binary_contents = fs::read(binary_path).unwrap();
     let op_codes = construct_opcodes();
     let mut registers = construct_registers();
+    let mut flag_registers = construct_flag_registers();
 
     let mut i: usize = 0;
     let mut instruction_count: usize = 1;
@@ -285,7 +288,6 @@ fn main() {
 
         if instruction == ImmediateToRegisterMemory {
             if !is_word_size {
-                // TODO: Do we have to handle 8 and 16-bit memory modes here in its own branch?
                 let third_byte = binary_contents[i + 2];
                 reg_immediate = third_byte as usize
             } else { // is_word_size
@@ -356,7 +358,6 @@ fn main() {
             let reg = get_register_state(&reg_register, &registers);
             if reg_is_dest || instruction == ImmediateToRegisterMOV {
                 // in this branch we can just update the value with the immediate.
-                // FIXME: do we want to pass the reg.register in here or can we somehow do it in a better way
                 update_register_value(reg.register, rm_immediate, &mut registers, instruction, memory_mode, mnemonic);
             } else {
                 let rm = get_register_state(&rm_register, &registers);
@@ -381,16 +382,15 @@ fn main() {
 
         if reg_is_dest || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
-            println!("{} ; {} -> {}", formatted_instruction, reg.original_value, reg.updated_value);
+            println!("{} ; {} -> {}, flags: {:?}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers));
         } else {
             let rm = get_register_state(&rm_register, &registers);
-            println!("{} ; {} -> {}", formatted_instruction, rm.original_value, rm.updated_value);
+            println!("{} ; {} -> {}, flags: {:?}", formatted_instruction, rm.original_value, rm.updated_value, get_all_currently_set_flags(&flag_registers));
         }
         instruction_count += 1;
         i += instruction_size;
 
 
-        // FIXME: this is kinda dumb, how do I do do this in a better way?
         if reg_is_dest || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
             update_original_register_value(reg.register, reg.updated_value, &mut registers);
@@ -398,7 +398,16 @@ fn main() {
             let rm = get_register_state(&rm_register, &registers);
             update_original_register_value(rm.register, rm.updated_value, &mut registers);
         }
-        // print!("size: {}, count: {} - ", instruction_size, instruction_count);
+
+        if mnemonic != "mov" {
+            if reg_is_dest {
+                let reg = get_register_state(&reg_register, &registers);
+                set_flags(reg.updated_value, &mut flag_registers);
+            } else {
+                let rm = get_register_state(&rm_register, &registers);
+                set_flags(rm.updated_value, &mut flag_registers);
+            }
+        }
     }
 }
 
