@@ -368,8 +368,6 @@ fn main() {
         } else {
             let reg = get_register_state(&reg_register, &registers);
             let rm = get_register_state(&rm_register, &registers);
-            // TODO: here is a bug that causes register to register movs to not work.
-            //  Registers get updated with the wrong register. Check this when you have time!!! Causes listing_0044 to fail.
             if reg_is_dest {
                 update_register_value(reg.register, rm.updated_value, &mut registers, instruction, memory_mode, mnemonic);
             } else {

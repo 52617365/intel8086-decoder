@@ -49,7 +49,7 @@ pub fn update_register_value(register_to_update: &'static str, value: usize, reg
             match instruction {
                 ImmediateToAccumulatorADD => reg.updated_value += value,
                 ImmediateToAccumulatorSUB => reg.updated_value -= value,
-                ImmediateToRegisterMemory => {
+                ImmediateToRegisterMemory | RegisterMemory => {
                     match memory_mode {
                         MemoryModeEnum::RegisterMode => {
                             match mnemonic {
