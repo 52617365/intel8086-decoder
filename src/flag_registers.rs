@@ -31,7 +31,6 @@ const FLAGS_REGISTERS: [&str; 2] = [
 pub struct FlagRegister {
     pub register: &'static str,
     pub is_set: bool,
-    pub mask: usize,
 }
 
 pub fn construct_flag_registers() -> [FlagRegister; 2] {
@@ -39,8 +38,8 @@ pub fn construct_flag_registers() -> [FlagRegister; 2] {
         // FlagRegister { register: "CF", is_set: false, mask: 0x0001 },
         // FlagRegister { register: "PF", is_set: false, mask: 0x0004 },
         // FlagRegister { register: "AF", is_set: false, mask: 0x0010 },
-        FlagRegister { register: "ZF", is_set: false, mask: 0x0040 },
-        FlagRegister { register: "SF", is_set: false, mask: 0x0080 },
+        FlagRegister { register: "ZF", is_set: false, /*mask: 0x0040 */},
+        FlagRegister { register: "SF", is_set: false, /*mask: 0x0080 */},
         // FlagRegister { register: "TF", is_set: false, mask: 0x0100 },
         // FlagRegister { register: "IF", is_set: false, mask: 0x0200 },
         // FlagRegister { register: "DF", is_set: false, mask: 0x0400 },
