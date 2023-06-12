@@ -382,10 +382,10 @@ fn main() {
 
         if reg_is_dest || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
-            println!("{} ; {} -> {}, flags: {:?}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers));
+            println!("{} | {} -> {} | flags: {:?}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers));
         } else {
             let rm = get_register_state(&rm_register, &registers);
-            println!("{} ; {} -> {}, flags: {:?}", formatted_instruction, rm.original_value, rm.updated_value, get_all_currently_set_flags(&flag_registers));
+            println!("{} | {} -> {} | flags: {:?}", formatted_instruction, rm.original_value, rm.updated_value, get_all_currently_set_flags(&flag_registers));
         }
         instruction_count += 1;
         i += instruction_size;
@@ -402,10 +402,10 @@ fn main() {
         if mnemonic != "mov" {
             if reg_is_dest {
                 let reg = get_register_state(&reg_register, &registers);
-                set_flags(reg.updated_value, &mut flag_registers);
+                set_flags(reg.updated_value, &mut flag_registers, is_word_size);
             } else {
                 let rm = get_register_state(&rm_register, &registers);
-                set_flags(rm.updated_value, &mut flag_registers);
+                set_flags(rm.updated_value, &mut flag_registers, is_word_size);
             }
         }
     }
@@ -453,9 +453,9 @@ fn format_instruction(binary_contents: &Vec<u8>, i: usize, first_byte: u8, secon
             }
         } else if memory_mode == RegisterMode {
             if reg_is_dest {
-                return format!("{} {}, {}", mnemonic, rm_register, reg_immediate);
-            } else {
                 return format!("{} {}, {}", mnemonic, reg_immediate, rm_register);
+            } else {
+                return format!("{} {}, {}", mnemonic, rm_register, reg_immediate);
             }
         } else {
             panic!("Invalid memory mode {:?}.", memory_mode);

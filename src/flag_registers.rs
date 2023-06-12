@@ -1,3 +1,6 @@
+use std::num::Wrapping;
+use std::ops::Add;
+
 // Flags registers that will be used to determine the state of the program.
 const FLAGS_REGISTERS: [&str; 2] = [
     // "cf", // carry flag
@@ -66,19 +69,19 @@ pub fn set_is_set_for_flag_register(flag: &'static str, flag_registers: &mut [Fl
     panic!("Flag {} not found", flag);
 }
 
-pub fn set_flags(destination_value: usize, flag_registers: &mut [FlagRegister]) -> () {
+pub fn set_flags(destination_value: usize, flag_registers: &mut [FlagRegister], is_word_size: bool) -> () {
     if destination_value == 0 {
         set_is_set_for_flag_register("ZF", flag_registers, true);
         return
     } else {
         set_is_set_for_flag_register("ZF", flag_registers, false);
     }
-
-    if destination_value < 0 {
+    if number_is_signed(destination_value, is_word_size) {
         set_is_set_for_flag_register("SF", flag_registers, true);
         return
     } else {
         set_is_set_for_flag_register("SF", flag_registers, false);
+        return
     }
 }
 
@@ -90,4 +93,19 @@ pub fn get_all_currently_set_flags(flag_registers: &[FlagRegister]) -> Vec<&str>
         }
     }
     return flags;
+}
+
+fn number_is_signed(value: usize, is_word_size: bool) -> bool {
+    let highest_bit = get_highest_bit(value, is_word_size);
+    return highest_bit == 1
+}
+
+fn get_highest_bit(value: usize, is_word_size: bool) -> usize {
+    if is_word_size {
+        // println!("value: {:16b}", value);
+        return value << 15;
+    } else {
+        // println!("value: {:08b}", value);
+        return value << 7;
+    }
 }
