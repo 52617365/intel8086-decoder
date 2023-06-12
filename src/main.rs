@@ -355,8 +355,8 @@ fn main() {
         }
 
         if instruction_is_immediate_to_register(instruction) {
-            let reg = get_register_state(&reg_register, &registers);
             if reg_is_dest || instruction == ImmediateToRegisterMOV {
+                let reg = get_register_state(&reg_register, &registers);
                 // in this branch we can just update the value with the immediate.
                 update_register_value(reg.register, rm_immediate, &mut registers, instruction, memory_mode, mnemonic);
             } else {
