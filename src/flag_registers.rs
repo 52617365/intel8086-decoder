@@ -1,7 +1,7 @@
 use std::num::Wrapping;
 use std::ops::Add;
 
-// Flags registers that will be used to determine the state of the program.
+// Flags registers that will be used to determine the state of the FLAGS registers.
 const FLAGS_REGISTERS: [&str; 2] = [
     // "cf", // carry flag
     // "reserved1",
@@ -76,6 +76,7 @@ pub fn set_flags(destination_value: usize, flag_registers: &mut [FlagRegister], 
     } else {
         set_is_set_for_flag_register("ZF", flag_registers, false);
     }
+
     if number_is_signed(destination_value, is_word_size) {
         set_is_set_for_flag_register("SF", flag_registers, true);
         return
@@ -102,10 +103,15 @@ fn number_is_signed(value: usize, is_word_size: bool) -> bool {
 
 fn get_highest_bit(value: usize, is_word_size: bool) -> usize {
     if is_word_size {
-        // println!("value: {:16b}", value);
-        return value << 15;
+        return value >> 15;
     } else {
-        // println!("value: {:08b}", value);
-        return value << 7;
+        return value >> 7;
+    }
+}
+
+
+pub fn clear_flags_registers(flag_registers: &mut [FlagRegister]) -> () {
+    for flag_register in flag_registers.iter_mut() {
+        flag_register.is_set = false;
     }
 }

@@ -11,7 +11,7 @@ use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 use crate::registers::{construct_registers, get_register_state, update_original_register_value, update_register_value};
-use crate::flag_registers::{construct_flag_registers, set_is_set_for_flag_register, set_flags, get_all_currently_set_flags};
+use crate::flag_registers::{construct_flag_registers, set_is_set_for_flag_register, set_flags, get_all_currently_set_flags, clear_flags_registers};
 
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
@@ -378,26 +378,6 @@ fn main() {
             }
         }
 
-        let formatted_instruction = format_instruction(&binary_contents, i, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
-
-        if reg_is_dest || instruction == ImmediateToRegisterMOV {
-            let reg = get_register_state(&reg_register, &registers);
-            println!("{} | {} -> {} | flags: {:?}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers));
-        } else {
-            let rm = get_register_state(&rm_register, &registers);
-            println!("{} | {} -> {} | flags: {:?}", formatted_instruction, rm.original_value, rm.updated_value, get_all_currently_set_flags(&flag_registers));
-        }
-        instruction_count += 1;
-        i += instruction_size;
-
-
-        if reg_is_dest || instruction == ImmediateToRegisterMOV {
-            let reg = get_register_state(&reg_register, &registers);
-            update_original_register_value(reg.register, reg.updated_value, &mut registers);
-        } else {
-            let rm = get_register_state(&rm_register, &registers);
-            update_original_register_value(rm.register, rm.updated_value, &mut registers);
-        }
 
         if mnemonic != "mov" {
             if reg_is_dest {
@@ -407,7 +387,32 @@ fn main() {
                 let rm = get_register_state(&rm_register, &registers);
                 set_flags(rm.updated_value, &mut flag_registers, is_word_size);
             }
+        } else {
+            // if instruction is mov, we clear the FLAGS register because MOV does not use it and it doesn't modify it.
+            clear_flags_registers(&mut flag_registers);
         }
+
+        let formatted_instruction = format_instruction(&binary_contents, i, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
+
+        if reg_is_dest || instruction == ImmediateToRegisterMOV {
+            let reg = get_register_state(&reg_register, &registers);
+            println!("{} | {} -> {} | flags: {:?}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers));
+        } else {
+            let rm = get_register_state(&rm_register, &registers);
+            println!("{} | {} -> {} | flags: {:?}", formatted_instruction, rm.original_value, rm.updated_value, get_all_currently_set_flags(&flag_registers));
+        }
+
+        instruction_count += 1;
+        i += instruction_size;
+
+        if reg_is_dest || instruction == ImmediateToRegisterMOV {
+            let reg = get_register_state(&reg_register, &registers);
+            update_original_register_value(reg.register, reg.updated_value, &mut registers);
+        } else {
+            let rm = get_register_state(&rm_register, &registers);
+            update_original_register_value(rm.register, rm.updated_value, &mut registers);
+        }
+
     }
 }
 
