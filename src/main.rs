@@ -268,8 +268,6 @@ fn main() {
     let mut instruction_pointer: usize = 0;
     let mut instruction_count: usize = 1;
     while instruction_pointer < binary_contents.len() {
-        // storing the old instruction pointer so we can print it out later.
-        old_instruction_pointer = instruction_pointer;
 
         let first_byte = binary_contents[instruction_pointer];
         let second_byte = binary_contents[instruction_pointer + 1];
@@ -281,6 +279,10 @@ fn main() {
         let is_s_bit_set = first_byte & S_BIT_M as u8 == 0b00000010;
         let instruction_size = determine_instruction_byte_size(instruction, is_word_size, memory_mode, mnemonic, is_s_bit_set);
         let reg_is_dest = first_byte & D_BITS as u8 != 0;
+
+        // storing the old instruction pointer so we can print it out later.
+        old_instruction_pointer = instruction_pointer;
+        instruction_pointer += instruction_size;
 
         let mut reg_register = String::new();
         let mut reg_immediate: i64 = 0;
@@ -300,13 +302,13 @@ fn main() {
                     ("mov", _) | ("cmp", false) | ("add", false) | ("sub", false) => {
                         if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit || memory_mode == DirectMemoryOperation {
                             // the immediate is guaranteed to be 16-bit because the s bit is set to 0 in this branch.
-                            let fifth_byte = binary_contents[instruction_pointer + 4];
-                            let sixth_byte = binary_contents[instruction_pointer + 5];
+                            let fifth_byte = binary_contents[old_instruction_pointer + 4];
+                            let sixth_byte = binary_contents[old_instruction_pointer + 5];
                             let combined = combine_bytes(sixth_byte, fifth_byte);
                             reg_immediate = combined as i64
                         } else {
-                            let third_byte = binary_contents[instruction_pointer + 2];
-                            let fourth_byte = binary_contents[instruction_pointer + 3];
+                            let third_byte = binary_contents[old_instruction_pointer + 2];
+                            let fourth_byte = binary_contents[old_instruction_pointer + 3];
                             let combined = combine_bytes(fourth_byte, third_byte);
                             reg_immediate = combined as i64
                         }
@@ -315,10 +317,10 @@ fn main() {
                         if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit || memory_mode == DirectMemoryOperation {
                             // In this branch we guarantee that the s bit is not set. Therefore the immediate can not be a 16-bit value.
                             // With 16-bit memory mode operations the immediate is in the fifth and sixth bytes depending on the size.
-                            let fifth_byte = binary_contents[instruction_pointer + 4];
+                            let fifth_byte = binary_contents[old_instruction_pointer + 4];
                             reg_immediate = fifth_byte as i64;
                         } else {
-                            let third_byte = binary_contents[instruction_pointer + 2];
+                            let third_byte = binary_contents[old_instruction_pointer + 2];
                             reg_immediate = third_byte as i64
                         }
                     }
@@ -327,7 +329,7 @@ fn main() {
             }
         } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB || instruction == ImmediateToAccumulatorCMP {
             if is_word_size {
-                let third_byte = binary_contents[instruction_pointer + 2];
+                let third_byte = binary_contents[old_instruction_pointer + 2];
                 let combined = combine_bytes(third_byte, second_byte);
                 reg_immediate = combined as i64
             } else {
@@ -346,7 +348,7 @@ fn main() {
 
             // With the immediate to register mov instruction, the immediate is stored in the second (and third byte if word sized).
             if is_word_size {
-                let third_byte = binary_contents[instruction_pointer + 2];
+                let third_byte = binary_contents[old_instruction_pointer + 2];
                 let combined = combine_bytes(third_byte, second_byte);
                 rm_immediate = combined as i64
             } else {
@@ -393,17 +395,19 @@ fn main() {
             clear_flags_registers(&mut flag_registers);
         }
 
-        let formatted_instruction = format_instruction(&binary_contents, instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
+        let formatted_instruction = format_instruction(&binary_contents, old_instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
 
-        instruction_count += 1;
-        instruction_pointer += instruction_size;
+        // TODO: we have to handle conditional jumps. We probably have to do it in a way where we calculate the the amount of indices we have to go backwards.
+        // 1. Check if the address in the second byte of a conditional jump is larger than the current instruction pointer.
+        // 2. Depending on the result, subtract the lower address from the higher address.
+        // 3. Divide the result by the size of the binary contents.
 
         if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
-            println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers), old_instruction_pointer, instruction_pointer);
+            println!("{} | {} -> {} | flags: {:?}, IP: {:p} -> {:p}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers), &old_instruction_pointer, &instruction_pointer);
         } else {
             let rm = get_register_state(&rm_register, &registers);
-            println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, rm.original_value, rm.updated_value, get_all_currently_set_flags(&flag_registers), old_instruction_pointer, instruction_pointer);
+            println!("{} | {} -> {} | flags: {:?}, IP: {:p} -> {:p}", formatted_instruction, rm.original_value, rm.updated_value, get_all_currently_set_flags(&flag_registers), &old_instruction_pointer, &instruction_pointer);
         }
 
 
