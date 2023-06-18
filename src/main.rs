@@ -11,7 +11,7 @@ use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 use crate::registers::{construct_registers, get_register_state, update_original_register_value, update_register_value};
-use crate::flag_registers::{construct_flag_registers, set_is_set_for_flag_register, set_flags, get_all_currently_set_flags, clear_flags_registers};
+use crate::flag_registers::{construct_flag_registers, set_is_set_for_flag_register, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set};
 
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
@@ -289,7 +289,6 @@ fn main() {
 
         // We are doing this if statement because in the case of an ImmediateToRegisterMemory (NON MOV one)
         // we actually do not have a REG register. the immediate value is always moved into the R/M register.
-
         if instruction == ImmediateToRegisterMemory {
             if !is_word_size {
                 let third_byte = binary_contents[instruction_pointer + 2];
@@ -359,7 +358,7 @@ fn main() {
         }
 
         if instruction_is_immediate_to_register(instruction) {
-            if reg_is_dest || instruction == ImmediateToRegisterMOV {
+            if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
                 let reg = get_register_state(&reg_register, &registers);
                 // in this branch we can just update the value with the immediate.
                 update_register_value(reg.register, rm_immediate, &mut registers, instruction, memory_mode, mnemonic);
@@ -368,8 +367,6 @@ fn main() {
                 // in this branch we can just update the value with the immediate.
                 update_register_value(rm.register, reg_immediate, &mut registers, instruction, memory_mode, mnemonic);
             }
-        } else if instruction_is_conditional_jump(instruction) {
-            // Leaving this here in case we have to implement it later with instruction pointers.
         } else {
             let reg = get_register_state(&reg_register, &registers);
             let rm = get_register_state(&rm_register, &registers);
@@ -384,7 +381,7 @@ fn main() {
 
 
         if mnemonic != "mov" {
-            if reg_is_dest {
+            if reg_is_dest && instruction != ImmediateToRegisterMemory {
                 let reg = get_register_state(&reg_register, &registers);
                 set_flags(reg.updated_value, &mut flag_registers, is_word_size);
             } else {
@@ -401,7 +398,7 @@ fn main() {
         instruction_count += 1;
         instruction_pointer += instruction_size;
 
-        if reg_is_dest || instruction == ImmediateToRegisterMOV {
+        if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
             println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers), old_instruction_pointer, instruction_pointer);
         } else {
@@ -410,7 +407,7 @@ fn main() {
         }
 
 
-        if reg_is_dest || instruction == ImmediateToRegisterMOV {
+        if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
             update_original_register_value(reg.register, reg.updated_value, &mut registers);
         } else {
@@ -418,6 +415,48 @@ fn main() {
             update_original_register_value(rm.register, rm.updated_value, &mut registers);
         }
 
+        // if instruction_is_conditional_jump(instruction) {
+        //     let jump_address = binary_contents[instruction_pointer + 1] as usize;
+        //     match instruction {
+        //         InstructionType::JE_JUMP | InstructionType::JLE_JUMP | InstructionType::JBE_JUMP => {
+        //             // JLE also has SF<>OF as condition but we don't handle OF currently.
+        //             // JBE also has CF=1 as condition but we don't handle CF currently.
+        //             if flag_register_is_set("ZF", &flag_registers) {
+        //                 instruction_pointer = jump_address;
+        //             }
+        //         },
+        //         InstructionType::JS_JUMP => {
+        //             if flag_register_is_set("SF", &flag_registers) {
+        //                 instruction_pointer = jump_address;
+        //             }
+        //         },
+        //         InstructionType::JNE_JUMP => {
+        //             if !flag_register_is_set("ZF", &flag_registers) {
+        //                 instruction_pointer = jump_address;
+        //             }
+        //         },
+        //         InstructionType::JNS => {
+        //             if !flag_register_is_set("SF", &flag_registers) {
+        //                 instruction_pointer = jump_address;
+        //             }
+        //         },
+        //         // InstructionType::JL_JUMP => ,
+        //         // InstructionType::JB_JUMP => ,
+        //         // InstructionType::JP_JUMP => ,
+        //         // InstructionType::JO_JUMP => ,
+        //         // InstructionType::JNL_JUMP => ,
+        //         // InstructionType::JNLE_JUMP => ,
+        //         // InstructionType::JNB_JUMP => ,
+        //         // InstructionType::JNBE_JUMP => ,
+        //         // InstructionType::JNP_JUMP => ,
+        //         // InstructionType::JNO_JUMP => ,
+        //         // InstructionType::LOOP => ,
+        //         // InstructionType::LOOPZ => ,
+        //         // InstructionType::LOOPNZ => ,
+        //         // InstructionType::JCXZ => ,
+        //         _ => (),
+        //     }
+        // }
     }
 }
 
