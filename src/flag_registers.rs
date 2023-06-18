@@ -101,9 +101,8 @@ fn number_is_signed(value: i64, is_word_size: bool) -> bool {
 }
 
 fn get_highest_bit(value: i64, is_word_size: bool) -> usize {
-    if value < 0 {
-        panic!("get_highest_bit() - Value {} is negative, we thought we didn't have to handle this but now we do.", value)
-    }
+    assert!(value >= 0, "get_highest_bit() - Value {} is negative, we thought we didn't have to handle this but now we do.", value);
+
     if is_word_size {
         return (value >> 15) as usize;
     } else {
