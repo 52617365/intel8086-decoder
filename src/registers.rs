@@ -9,8 +9,8 @@ use crate::bits::InstructionType::*;
 // we could construct this struct for each register at the start and then just iterate over the collection again and again.
 pub struct Register {
    pub register:       &'static str,
-   pub updated_value:  usize,
-   pub original_value: usize,
+   pub updated_value:  i64,
+   pub original_value: i64,
 }
 
 const REGISTERS: [&str; 16] = [
@@ -40,7 +40,7 @@ pub fn get_register_state<'a>(register: &String, registers: &'a Vec<Register>) -
     panic!("Register not found, this should never happen. Register that was not found was {}", register);
 }
 
-pub fn update_register_value(register_to_update: &'static str, value: usize, registers: &mut Vec<Register>, instruction: InstructionType, memory_mode: MemoryModeEnum, mnemonic: &'static str) -> () {
+pub fn update_register_value(register_to_update: &'static str, value: i64, registers: &mut Vec<Register>, instruction: InstructionType, memory_mode: MemoryModeEnum, mnemonic: &'static str) -> () {
     for reg in registers.iter_mut() {
         if reg.register == register_to_update {
             match instruction {
@@ -70,7 +70,7 @@ pub fn update_register_value(register_to_update: &'static str, value: usize, reg
     panic!("Register not found, this should never happen. Register that was not found was {}", register_to_update);
 }
 
-pub fn update_original_register_value(register_to_update: &'static str, value: usize, registers: &mut Vec<Register>) -> () {
+pub fn update_original_register_value(register_to_update: &'static str, value: i64, registers: &mut Vec<Register>) -> () {
     for reg in registers.iter_mut() {
         if reg.register == register_to_update {
             reg.original_value = value;
