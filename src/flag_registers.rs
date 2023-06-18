@@ -58,6 +58,15 @@ pub fn construct_flag_registers() -> [FlagRegister; 2] {
     return flags;
 }
 
+pub fn flag_register_is_set(flag: &'static str, flag_registers: &[FlagRegister]) -> bool {
+    for flag_register in flag_registers.iter() {
+        if flag_register.register == flag {
+            return flag_register.is_set;
+        }
+    }
+    panic!("Flag {} not found", flag);
+}
+
 pub fn set_is_set_for_flag_register(flag: &'static str, flag_registers: &mut [FlagRegister], value: bool) -> () {
     for flag_register in flag_registers.iter_mut() {
         if flag_register.register == flag {
