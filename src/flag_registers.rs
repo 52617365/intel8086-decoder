@@ -68,7 +68,7 @@ pub fn set_is_set_for_flag_register(flag: &'static str, flag_registers: &mut [Fl
     panic!("Flag {} not found", flag);
 }
 
-pub fn set_flags(destination_value: usize, flag_registers: &mut [FlagRegister], is_word_size: bool) -> () {
+pub fn set_flags(destination_value: i64, flag_registers: &mut [FlagRegister], is_word_size: bool) -> () {
     if destination_value == 0 {
         set_is_set_for_flag_register("ZF", flag_registers, true);
         return
@@ -95,16 +95,19 @@ pub fn get_all_currently_set_flags(flag_registers: &[FlagRegister]) -> Vec<&str>
     return flags;
 }
 
-fn number_is_signed(value: usize, is_word_size: bool) -> bool {
+fn number_is_signed(value: i64, is_word_size: bool) -> bool {
     let highest_bit = get_highest_bit(value, is_word_size);
     return highest_bit == 1
 }
 
-fn get_highest_bit(value: usize, is_word_size: bool) -> usize {
+fn get_highest_bit(value: i64, is_word_size: bool) -> usize {
+    if value < 0 {
+        panic!("get_highest_bit() - Value {} is negative, we thought we didn't have to handle this but now we do.", value)
+    }
     if is_word_size {
-        return value >> 15;
+        return (value >> 15) as usize;
     } else {
-        return value >> 7;
+        return (value >> 7) as usize;
     }
 }
 
