@@ -398,9 +398,8 @@ fn main() {
         let formatted_instruction = format_instruction(&binary_contents, old_instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
 
         // TODO: we have to handle conditional jumps. We probably have to do it in a way where we calculate the the amount of indices we have to go backwards.
-        // 1. Check if the address in the second byte of a conditional jump is larger than the current instruction pointer.
-        // 2. Depending on the result, subtract the lower address from the higher address.
-        // 3. Divide the result by the size of the binary contents.
+        // 1. Subtract the second byte containing address from the instruction pointer to know the offset to jump to.
+        // 2. Divide the result by the size of the binary contents.
 
         if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
