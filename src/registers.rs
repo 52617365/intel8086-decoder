@@ -1,12 +1,6 @@
-// TODO: Next we need to emulate the instructions, this means that we need to keep state of the values passed into the registers/memory locations.
-// it could possibly be wise to create a vector of structs that contain the register name, and the value associated with it.
-// we can then do a linear loop through the vector to see if the register we care about matches and get the value out that way.
-// it could also have a field that is like og_value that gets updated each time the value gets changed.
-
 use crate::bits::{instruction_is_conditional_jump, instruction_is_immediate_to_register, InstructionType, MemoryModeEnum};
 use crate::bits::InstructionType::*;
 
-// we could construct this struct for each register at the start and then just iterate over the collection again and again.
 pub struct Register {
    pub register:       &'static str,
    pub updated_value:  i64,
