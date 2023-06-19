@@ -91,9 +91,12 @@ fn get_highest_bit(value: i64, is_word_size: bool) -> usize {
     }
 }
 
-
 pub fn clear_flags_registers(flag_registers: &mut [FlagRegister]) -> () {
     for flag_register in flag_registers.iter_mut() {
         flag_register.is_set = false;
     }
+}
+
+pub fn twos_complement(num: u8) -> i8 {
+    (!num).wrapping_add(1) as i8
 }
