@@ -1,33 +1,6 @@
 use std::num::Wrapping;
 use std::ops::Add;
 
-// Flags registers that will be used to determine the state of the FLAGS registers.
-const FLAGS_REGISTERS: [&str; 2] = [
-    // "cf", // carry flag
-    // "reserved1",
-    // "pf", // parity flag
-    // "reserved2",
-    // "af", // auxiliary carry flag
-    // "reserved3",
-    "zf", // zero flag
-    "sf", // sign flag
-    // "tf", // trap flag
-    // "if", // interrupt enable flag
-    // "df", // direction flag
-    // "of", // overflow flag
-    // "iopl", // i/o privilege level
-    // "nt", // nested task flag
-    // "reserved4",
-    // "rf", // resume flag
-    // "vm", // virtual 8086 mode flag
-    // "ac", // alignment check
-    // "vif", // virtual interrupt flag
-    // "vip", // virtual interrupt pending
-    // "id", // able to use cpuid instruction
-    // "reserved5",
-    // "reserved6",
-];
-
 pub struct FlagRegister {
     pub register: &'static str,
     pub is_set: bool,
@@ -80,7 +53,6 @@ pub fn set_is_set_for_flag_register(flag: &'static str, flag_registers: &mut [Fl
 pub fn set_flags(destination_value: i64, flag_registers: &mut [FlagRegister], is_word_size: bool) -> () {
     if destination_value == 0 {
         set_is_set_for_flag_register("ZF", flag_registers, true);
-        return
     } else {
         set_is_set_for_flag_register("ZF", flag_registers, false);
     }

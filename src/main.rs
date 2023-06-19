@@ -5,7 +5,8 @@ mod flag_registers;
 use bits::*;
 
 use core::panic;
-use std::{env, fs};
+use std::{env, fs, mem};
+use std::mem::size_of;
 use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumulatorCMP, ImmediateToRegisterMemory, ImmediateToRegisterMOV, ImmediateToAccumulatorSUB, RegisterMemory, JE_JUMP, JL_JUMP, JLE_JUMP, JB_JUMP, JBE_JUMP, JP_JUMP, JO_JUMP, JS_JUMP, JNE_JUMP, JNL_JUMP, LOOP, LOOPZ, JCXZ, LOOPNZ, JNS, JNO_JUMP, JNBE_JUMP, JNP_JUMP, JNB_JUMP, JNLE_JUMP};
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
@@ -266,7 +267,6 @@ fn main() {
 
     let mut old_instruction_pointer: usize = 0;
     let mut instruction_pointer: usize = 0;
-    let mut instruction_count: usize = 1;
     while instruction_pointer < binary_contents.len() {
 
         let first_byte = binary_contents[instruction_pointer];
@@ -382,7 +382,7 @@ fn main() {
         }
 
 
-        if mnemonic != "mov" {
+        if mnemonic != "mov" && !instruction_is_conditional_jump(instruction) {
             if reg_is_dest && instruction != ImmediateToRegisterMemory {
                 let reg = get_register_state(&reg_register, &registers);
                 set_flags(reg.updated_value, &mut flag_registers, is_word_size);
@@ -396,10 +396,6 @@ fn main() {
         }
 
         let formatted_instruction = format_instruction(&binary_contents, old_instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
-
-        // TODO: we have to handle conditional jumps. We probably have to do it in a way where we calculate the the amount of indices we have to go backwards.
-        // 1. Subtract the second byte containing address from the instruction pointer to know the offset to jump to.
-        // 2. Divide the result by the size of the binary contents.
 
         if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
@@ -418,48 +414,70 @@ fn main() {
             update_original_register_value(rm.register, rm.updated_value, &mut registers);
         }
 
-        // if instruction_is_conditional_jump(instruction) {
-        //     let jump_address = binary_contents[instruction_pointer + 1] as usize;
-        //     match instruction {
-        //         InstructionType::JE_JUMP | InstructionType::JLE_JUMP | InstructionType::JBE_JUMP => {
-        //             // JLE also has SF<>OF as condition but we don't handle OF currently.
-        //             // JBE also has CF=1 as condition but we don't handle CF currently.
-        //             if flag_register_is_set("ZF", &flag_registers) {
-        //                 instruction_pointer = jump_address;
-        //             }
-        //         },
-        //         InstructionType::JS_JUMP => {
-        //             if flag_register_is_set("SF", &flag_registers) {
-        //                 instruction_pointer = jump_address;
-        //             }
-        //         },
-        //         InstructionType::JNE_JUMP => {
-        //             if !flag_register_is_set("ZF", &flag_registers) {
-        //                 instruction_pointer = jump_address;
-        //             }
-        //         },
-        //         InstructionType::JNS => {
-        //             if !flag_register_is_set("SF", &flag_registers) {
-        //                 instruction_pointer = jump_address;
-        //             }
-        //         },
-        //         // InstructionType::JL_JUMP => ,
-        //         // InstructionType::JB_JUMP => ,
-        //         // InstructionType::JP_JUMP => ,
-        //         // InstructionType::JO_JUMP => ,
-        //         // InstructionType::JNL_JUMP => ,
-        //         // InstructionType::JNLE_JUMP => ,
-        //         // InstructionType::JNB_JUMP => ,
-        //         // InstructionType::JNBE_JUMP => ,
-        //         // InstructionType::JNP_JUMP => ,
-        //         // InstructionType::JNO_JUMP => ,
-        //         // InstructionType::LOOP => ,
-        //         // InstructionType::LOOPZ => ,
-        //         // InstructionType::LOOPNZ => ,
-        //         // InstructionType::JCXZ => ,
-        //         _ => (),
-        //     }
-        // }
+
+        // TODO: we have to handle conditional jumps. We probably have to do it in a way where we calculate the the amount of indices we have to go backwards.
+        // 1. Subtract the second byte containing address from the instruction pointer to know the offset to jump to.
+        // 2. Divide the result by the size of the binary contents.
+        if instruction_is_conditional_jump(instruction) {
+            let address_of_jump_address = &second_byte as *const _ as usize;
+            let address_of_instruction_pointer = &instruction_pointer as *const _ as usize;
+
+            let element_size = size_of::<u8>() * 8;
+            let index_offset = if address_of_instruction_pointer > address_of_jump_address {
+                (address_of_instruction_pointer - address_of_jump_address) / element_size
+            } else {
+                (address_of_jump_address - address_of_instruction_pointer) / element_size
+            };
+
+            let mut jump_happens = false;
+
+            match instruction {
+                JE_JUMP | JLE_JUMP | JBE_JUMP => {
+                    // JLE also has SF<>OF as condition but we don't handle OF currently.
+                    // JBE also has CF=1 as condition but we don't handle CF currently.
+                    if flag_register_is_set("ZF", &flag_registers) {
+                        jump_happens = true;
+                    }
+                },
+                JS_JUMP => {
+                    if flag_register_is_set("SF", &flag_registers) {
+                        jump_happens = true;
+                    }
+                },
+                JNE_JUMP => {
+                    if !flag_register_is_set("ZF", &flag_registers) {
+                        jump_happens = true;
+                    }
+                },
+                JNS => {
+                    if !flag_register_is_set("SF", &flag_registers) {
+                        jump_happens = true;
+                    }
+                },
+                // InstructionType::JL_JUMP => ,
+                // InstructionType::JB_JUMP => ,
+                // InstructionType::JP_JUMP => ,
+                // InstructionType::JO_JUMP => ,
+                // InstructionType::JNL_JUMP => ,
+                // InstructionType::JNLE_JUMP => ,
+                // InstructionType::JNB_JUMP => ,
+                // InstructionType::JNBE_JUMP => ,
+                // InstructionType::JNP_JUMP => ,
+                // InstructionType::JNO_JUMP => ,
+                // InstructionType::LOOP => ,
+                // InstructionType::LOOPZ => ,
+                // InstructionType::LOOPNZ => ,
+                // InstructionType::JCXZ => ,
+                _ => (),
+            }
+            if jump_happens {
+                if address_of_instruction_pointer > address_of_jump_address {
+                    instruction_pointer -= index_offset;
+                } else {
+                    instruction_pointer += index_offset;
+                }
+            }
+        }
     }
 }
 
