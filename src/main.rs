@@ -375,21 +375,27 @@ fn main() {
         }
 
 
-        if mnemonic != "mov" && !instruction_is_conditional_jump(instruction) {
-            if reg_is_dest && instruction != ImmediateToRegisterMemory {
-                let reg = get_register_state(&reg_register, &registers);
-                set_flags(reg.updated_value, &mut flag_registers, is_word_size);
-            } else {
-                let rm = get_register_state(&rm_register, &registers);
-                if rm.updated_value > 0 {
-                    set_flags(rm.updated_value, &mut flag_registers, is_word_size);
+        if !instruction_is_conditional_jump(instruction) {
+            if mnemonic != "mov" {
+                if reg_is_dest && instruction != ImmediateToRegisterMemory {
+                    let reg = get_register_state(&reg_register, &registers);
+                    if reg.updated_value >= 0 {
+                        set_flags(reg.updated_value, &mut flag_registers, is_word_size);
+                    } else {
+                        return
+                    }
                 } else {
-                    return
+                    let rm = get_register_state(&rm_register, &registers);
+                    if rm.updated_value >= 0 {
+                        set_flags(rm.updated_value, &mut flag_registers, is_word_size);
+                    } else {
+                        return
+                    }
                 }
+            } else {
+                // We don't clear if it's a conditional jump because the jnz conditional jump for example relies on the flags to know when to stop jumping.
+                clear_flags_registers(&mut flag_registers);
             }
-        } else {
-            // if instruction is mov, we clear the FLAGS register because MOV does not use it and it doesn't modify it.
-            clear_flags_registers(&mut flag_registers);
         }
 
         let formatted_instruction = format_instruction(&binary_contents, instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
@@ -398,10 +404,23 @@ fn main() {
 
         if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
-            println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
+            if instruction_is_conditional_jump(instruction) {
+                // we print this out separately because does not modify flags but it relies on them to know when to stop a loop for example so
+                // we don't want to clear it but we still want to signal in the print that it does not modify flags.
+                println!("{} | {} -> {} | flags: [], IP: {} -> {}", formatted_instruction, reg.original_value, reg.updated_value, instruction_pointer - instruction_size, instruction_pointer);
+            } else {
+                println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
+            }
         } else {
             let rm = get_register_state(&rm_register, &registers);
-            println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, rm.original_value, rm.updated_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
+
+            if instruction_is_conditional_jump(instruction) {
+                // we print this out separately because does not modify flags but it relies on them to know when to stop a loop for example so
+                // we don't want to clear it but we still want to signal in the print that it does not modify flags.
+                println!("{} | {} -> {} | flags: [], IP: {} -> {}", formatted_instruction, rm.original_value, rm.updated_value, instruction_pointer - instruction_size, instruction_pointer);
+            } else {
+                println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, rm.original_value, rm.updated_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
+            }
         }
 
 
@@ -415,13 +434,12 @@ fn main() {
 
 
         if instruction_is_conditional_jump(instruction) {
-
             let mut jump_happens = false;
 
             match instruction {
                 JE_JUMP | JLE_JUMP | JBE_JUMP => {
-                    // JLE also has SF<>OF as condition but we don't handle OF currently.
-                    // JBE also has CF=1 as condition but we don't handle CF currently.
+                    // JLE also has SF<>OF as a condition but we don't handle OF currently.
+                    // JBE also has CF=1 as a condition but we don't handle CF currently.
                     if flag_register_is_set("ZF", &flag_registers) {
                         jump_happens = true;
                     }
@@ -445,6 +463,8 @@ fn main() {
             }
             if jump_happens {
                 let offset = twos_complement(second_byte) as usize;
+                // We might need to add logic in case the jump is forwards but
+                // that was not in the assignment so I'm not going to worry about that yet.
                 instruction_pointer -= offset;
             }
         }
