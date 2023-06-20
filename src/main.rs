@@ -6,14 +6,12 @@ use bits::*;
 
 use core::panic;
 use std::{env, fs, mem};
-use std::mem::size_of;
 use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumulatorCMP, ImmediateToRegisterMemory, ImmediateToRegisterMOV, ImmediateToAccumulatorSUB, RegisterMemory, JE_JUMP, JL_JUMP, JLE_JUMP, JB_JUMP, JBE_JUMP, JP_JUMP, JO_JUMP, JS_JUMP, JNE_JUMP, JNL_JUMP, LOOP, LOOPZ, JCXZ, LOOPNZ, JNS, JNO_JUMP, JNBE_JUMP, JNP_JUMP, JNB_JUMP, JNLE_JUMP};
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 use crate::registers::{construct_registers, get_register_state, update_original_register_value, update_register_value};
-use crate::flag_registers::{construct_flag_registers, set_is_set_for_flag_register, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, twos_complement};
-
+use crate::flag_registers::{construct_flag_registers, set_is_set_for_flag_register, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, twos_complement, number_is_signed};
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
 // This function does not work with the immediate to registers because they use the s bit also, we have to take into consideration
@@ -383,8 +381,11 @@ fn main() {
                 set_flags(reg.updated_value, &mut flag_registers, is_word_size);
             } else {
                 let rm = get_register_state(&rm_register, &registers);
-                // FIXME: why is rm.updated value sometimes -1 here? It causes an assert to fire.
-                set_flags(rm.updated_value, &mut flag_registers, is_word_size);
+                if rm.updated_value > 0 {
+                    set_flags(rm.updated_value, &mut flag_registers, is_word_size);
+                } else {
+                    return
+                }
             }
         } else {
             // if instruction is mov, we clear the FLAGS register because MOV does not use it and it doesn't modify it.
@@ -415,8 +416,6 @@ fn main() {
 
         if instruction_is_conditional_jump(instruction) {
 
-            // TODO: the byte offset is actually embedded in the second byte directly by Casey.
-            // we don't have to do any fucky shit to get the offset. Thankfully so.
             let mut jump_happens = false;
 
             match instruction {
@@ -447,9 +446,6 @@ fn main() {
             if jump_happens {
                 let offset = twos_complement(second_byte) as usize;
                 instruction_pointer -= offset;
-
-
-                // instruction_pointer = get_address_index(&binary_contents, address_of_jump_address);
             }
         }
     }
@@ -496,11 +492,9 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
                 }
             }
         } else if memory_mode == RegisterMode {
-            if reg_is_dest {
-                return format!("{} {}, {}", mnemonic, reg_immediate, rm_register);
-            } else {
-                return format!("{} {}, {}", mnemonic, rm_register, reg_immediate);
-            }
+            // NOTE: The reason why the destination is always rm_register is because with the
+            // ImmediateToRegisterMemory instruction, the destination is always the rm_register.
+            return format!("{} {}, {}", mnemonic, rm_register, reg_immediate);
         } else {
             panic!("Invalid memory mode {:?}.", memory_mode);
         }
