@@ -14,7 +14,6 @@
 
 use crate::bits::Masks::{D_BITS, MOD_BITS};
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
-use crate::is_word_size;
 
 // InstructionTable contains all the possible instructions that we are trying to decode.
 #[derive(PartialEq, Debug, Clone, Copy)]

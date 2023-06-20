@@ -1,4 +1,4 @@
-use crate::bits::{instruction_is_conditional_jump, instruction_is_immediate_to_register, InstructionType, MemoryModeEnum};
+use crate::bits::{InstructionType, MemoryModeEnum};
 use crate::bits::InstructionType::*;
 
 pub struct Register {

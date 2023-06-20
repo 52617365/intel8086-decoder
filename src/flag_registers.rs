@@ -1,6 +1,3 @@
-use std::num::Wrapping;
-use std::ops::Add;
-
 pub struct FlagRegister {
     pub register: &'static str,
     pub is_set: bool,
@@ -76,7 +73,7 @@ pub fn get_all_currently_set_flags(flag_registers: &[FlagRegister]) -> Vec<&str>
     return flags;
 }
 
-pub fn number_is_signed(value: i64, is_word_size: bool) -> bool {
+fn number_is_signed(value: i64, is_word_size: bool) -> bool {
     let highest_bit = get_highest_bit(value, is_word_size);
     return highest_bit == 1
 }

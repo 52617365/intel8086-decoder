@@ -5,13 +5,13 @@ mod flag_registers;
 use bits::*;
 
 use core::panic;
-use std::{env, fs, mem};
+use std::{env, fs};
 use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumulatorCMP, ImmediateToRegisterMemory, ImmediateToRegisterMOV, ImmediateToAccumulatorSUB, RegisterMemory, JE_JUMP, JL_JUMP, JLE_JUMP, JB_JUMP, JBE_JUMP, JP_JUMP, JO_JUMP, JS_JUMP, JNE_JUMP, JNL_JUMP, LOOP, LOOPZ, JCXZ, LOOPNZ, JNS, JNO_JUMP, JNBE_JUMP, JNP_JUMP, JNB_JUMP, JNLE_JUMP};
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 use crate::registers::{construct_registers, get_register_state, update_original_register_value, update_register_value};
-use crate::flag_registers::{construct_flag_registers, set_is_set_for_flag_register, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, twos_complement, number_is_signed};
+use crate::flag_registers::{construct_flag_registers, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, twos_complement};
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
 // This function does not work with the immediate to registers because they use the s bit also, we have to take into consideration
