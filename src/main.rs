@@ -1,9 +1,12 @@
 mod bits;
 mod registers;
 mod flag_registers;
+mod memory;
 
 use bits::*;
 
+use crate::memory::{get_16_bit_displacement, get_8_bit_displacement};
+use crate::bits::combine_bytes;
 use core::panic;
 use std::{env, fs};
 use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumulatorCMP, ImmediateToRegisterMemory, ImmediateToRegisterMOV, ImmediateToAccumulatorSUB, RegisterMemory, JE_JUMP, JL_JUMP, JLE_JUMP, JB_JUMP, JBE_JUMP, JP_JUMP, JO_JUMP, JS_JUMP, JNE_JUMP, JNL_JUMP, LOOP, LOOPZ, JCXZ, LOOPNZ, JNS, JNO_JUMP, JNBE_JUMP, JNP_JUMP, JNB_JUMP, JNLE_JUMP};
@@ -16,9 +19,7 @@ use crate::flag_registers::{construct_flag_registers, set_flags, get_all_current
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
 // This function does not work with the immediate to registers because they use the s bit also, we have to take into consideration
 // that bit separately.
-fn is_word_size(first_byte: u8, inst_type: InstructionType) -> bool {
-    return if inst_type == ImmediateToRegisterMOV {
-        first_byte & IMMEDIATE_TO_REG_MOV_W_BIT as u8 != 0
+fn is_word_size(first_byte: u8, inst_type: InstructionType) -> bool { return if inst_type == ImmediateToRegisterMOV { first_byte & IMMEDIATE_TO_REG_MOV_W_BIT as u8 != 0
     } else {
         first_byte & Masks::W_BIT as u8 != 0
     }
@@ -151,9 +152,6 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
     }
 }
 
-fn combine_bytes(high_byte: u8, low_byte: u8) -> u16 {
-    ((high_byte as u16) << 8) | (low_byte as u16)
-}
 
 fn get_mnemonic(first_byte: u8, second_byte: u8, inst: InstructionType) -> &'static str {
     // We need this to determine the mnemonic for immediate to register moves.
@@ -262,6 +260,7 @@ fn main() {
     let op_codes = construct_opcodes();
     let mut registers = construct_registers();
     let mut flag_registers = construct_flag_registers();
+    let mut memory : [u8; 64000] = [0; 64000];
 
     let mut instruction_pointer: usize = 0;
     while instruction_pointer < binary_contents.len() {
@@ -377,20 +376,24 @@ fn main() {
 
         if !instruction_is_conditional_jump(instruction) {
             if mnemonic != "mov" {
-                if reg_is_dest && instruction != ImmediateToRegisterMemory {
-                    let reg = get_register_state(&reg_register, &registers);
-                    if reg.updated_value >= 0 {
-                        set_flags(reg.updated_value, &mut flag_registers, is_word_size);
-                    } else {
-                        return
-                    }
+                let mut value: i64 = 0;
+
+                if memory_mode == MemoryModeNoDisplacement || memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
+                    // Handle storing and loading etc.
                 } else {
-                    let rm = get_register_state(&rm_register, &registers);
-                    if rm.updated_value >= 0 {
-                        set_flags(rm.updated_value, &mut flag_registers, is_word_size);
+                    if reg_is_dest && instruction != ImmediateToRegisterMemory {
+                        let reg = get_register_state(&reg_register, &registers);
+                        value = reg.updated_value;
                     } else {
-                        return
+                        let rm = get_register_state(&rm_register, &registers);
+                        value = rm.updated_value;
                     }
+                }
+
+                if value >= 0 {
+                    set_flags(value, &mut flag_registers, is_word_size);
+                } else {
+                    return
                 }
             } else {
                 // We don't clear if it's a conditional jump because the jnz conditional jump for example relies on the flags to know when to stop jumping.
@@ -591,16 +594,4 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
     } else {
         panic!("Unknown instruction: {:?}, did not expect to get here.", instruction);
     }
-}
-
-fn get_16_bit_displacement(binary_contents: &Vec<u8>, i: usize) -> usize {
-    let first_disp = binary_contents[i + 2];
-    let second_disp = binary_contents[i + 3];
-    let displacement = combine_bytes(second_disp, first_disp);
-    displacement as usize
-}
-
-fn get_8_bit_displacement(binary_contents: &Vec<u8>, i: usize) -> usize {
-    let first_disp = binary_contents[i + 2];
-    return first_disp as usize
 }

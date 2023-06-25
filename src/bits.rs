@@ -72,6 +72,13 @@ pub fn instruction_is_conditional_jump(instruction: InstructionType) -> bool {
     }
 }
 
+pub fn instruction_uses_memory(memory_mode: MemoryModeEnum) -> bool {
+    match memory_mode {
+        MemoryModeNoDisplacement | MemoryMode8Bit | MemoryMode16Bit => true,
+        _ => false,
+    }
+}
+
 pub fn instruction_is_immediate_to_register(instruction: InstructionType) -> bool {
     match instruction {
         InstructionType::ImmediateToRegisterMemory => true,
@@ -252,6 +259,10 @@ pub const S_BIT_M: Masks = D_BITS;
 // It's the same bits but I want to express it in the name.
 pub const IMMEDIATE_TO_MOV_REG_BITS: Masks = Masks::RM_BITS;
 
+
+pub fn combine_bytes(high_byte: u8, low_byte: u8) -> u16 {
+    ((high_byte as u16) << 8) | (low_byte as u16)
+}
 
 pub fn determine_memory_mode(second_byte: u8) -> MemoryModeEnum {
     let mod_field = second_byte & MOD_BITS as u8;
