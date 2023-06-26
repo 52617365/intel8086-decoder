@@ -585,10 +585,10 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
             }
         } else if memory_mode == DirectMemoryOperation {
             let displacement = get_16_bit_displacement(binary_contents, ip);
-            if reg_is_dest {
-                return format!("{} {}, [{}]", mnemonic, displacement, rm_register)
+            if is_word_size {
+                return format!("{} {}, word [{}]", mnemonic, reg_register, displacement);
             } else {
-                return format!("{} {}, [{}]", mnemonic, rm_register, displacement)
+                return format!("{} {}, byte [{}]", mnemonic, reg_register, displacement);
             }
         } else {
             panic!("Unknown memory mode: {:?}, did not expect to get here.", memory_mode);
