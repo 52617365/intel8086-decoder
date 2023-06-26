@@ -3,9 +3,14 @@ mod registers;
 mod flag_registers;
 mod memory;
 
+/* TODO:
+  Expected: mov word [bx + 4], 10
+  Result:   mov word [bx + 4], 35584
+
+*/
 use bits::*;
 
-use crate::memory::{get_16_bit_displacement, get_8_bit_displacement};
+use crate::memory::{get_16_bit_displacement, get_8_bit_displacement, store_memory_value};
 use crate::bits::combine_bytes;
 use core::panic;
 use std::{env, fs};
@@ -14,7 +19,7 @@ use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 use crate::registers::{construct_registers, get_register_state, update_original_register_value, update_register_value};
-use crate::flag_registers::{construct_flag_registers, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, twos_complement};
+use crate::flag_registers::{construct_flag_registers, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, twos_complement, FlagRegister};
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
 // This function does not work with the immediate to registers because they use the s bit also, we have to take into consideration
@@ -356,12 +361,27 @@ fn main() {
                 let reg = get_register_state(&reg_register, &registers);
                 // in this branch we can just update the value with the immediate.
                 update_register_value(reg.register, rm_immediate, &mut registers, instruction, memory_mode, mnemonic);
-            } else {
+            } else if instruction_uses_memory(memory_mode) {
+                let mut disp = 0;
+                if memory_mode == MemoryMode8Bit {
+                    disp = get_8_bit_displacement(&binary_contents, instruction_pointer);
+                } else if memory_mode == MemoryMode16Bit {
+                    disp = get_16_bit_displacement(&binary_contents, instruction_pointer);
+                }
+                // rm is destination here.
+                let rm = get_register_state(&rm_register, &registers).updated_value; // rm holds the memory address here.
+                let value = reg_immediate;
+
+                assert!(rm >= 0, "Memory address is negative and we're casting it to usize: {}", rm);
+                store_memory_value(&mut memory, memory_mode, rm as usize, disp, value, instruction, mnemonic, is_word_size);
+            }
+            else {
                 let rm = get_register_state(&rm_register, &registers);
                 // in this branch we can just update the value with the immediate.
                 update_register_value(rm.register, reg_immediate, &mut registers, instruction, memory_mode, mnemonic);
             }
-        } else {
+        }
+        else {
             let reg = get_register_state(&reg_register, &registers);
             let rm = get_register_state(&rm_register, &registers);
             if reg_is_dest {
@@ -379,7 +399,7 @@ fn main() {
                 let mut value: i64 = 0;
 
                 if memory_mode == MemoryModeNoDisplacement || memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
-                    // Handle storing and loading etc.
+                    // Handle storing and loading etc and load it into value.
                 } else {
                     if reg_is_dest && instruction != ImmediateToRegisterMemory {
                         let reg = get_register_state(&reg_register, &registers);
@@ -437,40 +457,44 @@ fn main() {
 
 
         if instruction_is_conditional_jump(instruction) {
-            let mut jump_happens = false;
-
-            match instruction {
-                JE_JUMP | JLE_JUMP | JBE_JUMP => {
-                    // JLE also has SF<>OF as a condition but we don't handle OF currently.
-                    // JBE also has CF=1 as a condition but we don't handle CF currently.
-                    if flag_register_is_set("ZF", &flag_registers) {
-                        jump_happens = true;
-                    }
-                },
-                JS_JUMP => {
-                    if flag_register_is_set("SF", &flag_registers) {
-                        jump_happens = true;
-                    }
-                },
-                JNE_JUMP => {
-                    if !flag_register_is_set("ZF", &flag_registers) {
-                        jump_happens = true;
-                    }
-                },
-                JNS => {
-                    if !flag_register_is_set("SF", &flag_registers) {
-                        jump_happens = true;
-                    }
-                },
-                _ => (),
-            }
-            if jump_happens {
-                let offset = twos_complement(second_byte) as usize;
-                // We might need to add logic in case the jump is forwards but
-                // that was not in the assignment so I'm not going to worry about that yet.
-                instruction_pointer -= offset;
-            }
+            perform_conditional_jump(&mut flag_registers, &mut instruction_pointer, second_byte, instruction);
         }
+    }
+}
+
+fn perform_conditional_jump(flag_registers: &mut [FlagRegister; 2], instruction_pointer: &mut usize, second_byte: u8, instruction: InstructionType) {
+    let mut jump_happens = false;
+
+    match instruction {
+        JE_JUMP | JLE_JUMP | JBE_JUMP => {
+            // JLE also has SF<>OF as a condition but we don't handle OF currently.
+            // JBE also has CF=1 as a condition but we don't handle CF currently.
+            if flag_register_is_set("ZF", flag_registers) {
+                jump_happens = true;
+            }
+        },
+        JS_JUMP => {
+            if flag_register_is_set("SF", flag_registers) {
+                jump_happens = true;
+            }
+        },
+        JNE_JUMP => {
+            if !flag_register_is_set("ZF", flag_registers) {
+                jump_happens = true;
+            }
+        },
+        JNS => {
+            if !flag_register_is_set("SF", flag_registers) {
+                jump_happens = true;
+            }
+        },
+        _ => (),
+    }
+    if jump_happens {
+        let offset = twos_complement(second_byte) as usize;
+        // We might need to add logic in case the jump is forwards but
+        // that was not in the assignment so I'm not going to worry about that yet.
+        *instruction_pointer -= offset;
     }
 }
 

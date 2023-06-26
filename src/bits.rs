@@ -74,7 +74,7 @@ pub fn instruction_is_conditional_jump(instruction: InstructionType) -> bool {
 
 pub fn instruction_uses_memory(memory_mode: MemoryModeEnum) -> bool {
     match memory_mode {
-        MemoryModeNoDisplacement | MemoryMode8Bit | MemoryMode16Bit => true,
+        MemoryModeNoDisplacement | MemoryMode8Bit | MemoryMode16Bit | DirectMemoryOperation => true,
         _ => false,
     }
 }
@@ -303,7 +303,14 @@ pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool
         }
         InstructionType::ImmediateToRegisterMemory => {
             if mnemonic == "mov" {
-                if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {
+                if memory_mode == MemoryMode8Bit {
+                    if is_word_size {
+                        return 5;
+                    } else {
+                        return 4;
+                    }
+                }
+                if memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {
                     if is_word_size {
                         return 6;
                     } else {
@@ -319,7 +326,15 @@ pub fn determine_instruction_byte_size(inst: InstructionType, is_word_size: bool
             } else if mnemonic == "add" || mnemonic == "sub" || mnemonic == "cmp" {
                 // add is 01 sw for 16-bit
                 // this means that s bit has to be set to 0 if w is 1 for it to be 6 bytes wide.
-                if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {
+
+                if memory_mode == MemoryMode8Bit {
+                    if is_word_size && !s_bit_set {
+                        return 5;
+                    } else {
+                        return 4;
+                    }
+                }
+                if memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {
                     if is_word_size && !s_bit_set {
                         return 6;
                     } else {

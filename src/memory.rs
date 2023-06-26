@@ -1,36 +1,5 @@
 use crate::bits::{MemoryModeEnum, combine_bytes, InstructionType};
 
-pub fn store_memory(memory: &mut [u8], memory_mode: MemoryModeEnum, address: usize, displacement: usize, value: usize, is_word_size: bool) {
-    assert!(address < memory.len(), "Address was larger than than the available memory.");
-    assert!(value <= u16::MAX as usize, "Value exceeds maximum 16-bit value");
-
-    if memory_mode == MemoryModeEnum::MemoryModeNoDisplacement {
-        if is_word_size {
-            let bytes = separate_word_sized_value_into_bytes(value);
-
-            memory[address] = bytes.lower_byte;
-            memory[address + 1] = bytes.upper_byte;
-        } else {
-            assert!(value < u8::MAX as usize, "we're trying to cast a value higher than u8 into an u8.");
-            memory[address] = value as u8;
-        }
-    } else if memory_mode == MemoryModeEnum::MemoryMode8Bit || memory_mode == MemoryModeEnum::MemoryMode16Bit {
-        // If it's a 8 or 16-bit memory mode operation, it means that the memory mode has a
-        // relative address displacement and we have to add that to the address we're accessing.
-        let address_with_displacement = address + displacement;
-        if is_word_size {
-            let bytes = separate_word_sized_value_into_bytes(value);
-
-            memory[address_with_displacement] = bytes.lower_byte;
-            memory[address_with_displacement + 1] = bytes.upper_byte; 
-        } else {
-            assert!(value < u8::MAX as usize, "we're trying to cast a value higher than u8 into an u8."); memory[address_with_displacement] = value as u8;
-        }
-    } else {
-        panic!("store_memory was called when the memory_mode was {:?} and this is unexpected", memory_mode);
-    }
-}
-
 pub fn load_memory(memory: &[u8], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, is_word_size: bool) -> usize {
     assert!(memory_address < memory.len(), "Address was larger than than the available memory.");
 
@@ -54,43 +23,45 @@ pub fn load_memory(memory: &[u8], memory_mode: MemoryModeEnum, memory_address: u
     }
 }
 
-// TODO: update_memory_value currently has a problem where subtractions can go under 0. this is bad
+// TODO: store_memory_value currently has a problem where subtractions can go under 0. this is bad
 // because we need to do shift operations on the numbers and it will lead to unexpected shit.
-pub fn update_memory_value(memory: &mut [u8], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, value: usize, instruction: InstructionType, mnemonic: &'static str, is_word_size: bool) -> () {
+pub fn store_memory_value(memory: &mut [u8; 64000], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, value: i64, instruction: InstructionType, mnemonic: &'static str, is_word_size: bool) -> () {
     let mut updated_memory_address = memory_address;
     if memory_mode == MemoryModeEnum::MemoryMode8Bit || memory_mode == MemoryModeEnum::MemoryMode16Bit {
         updated_memory_address += displacement;
     }
 
-    let mut updated_value: usize = 0;
+    let mut updated_value: i64 = 0;
     if mnemonic == "mov" {
         updated_value = value;
     } else if mnemonic == "add" || mnemonic == "sub" {
-        let mut memory_contents: usize;
+        let mut memory_contents: i64;
 
         if is_word_size {
-            memory_contents = combine_bytes(memory[memory_address + 1], memory[memory_address]) as usize;
+            memory_contents = combine_bytes(memory[memory_address + 1], memory[memory_address]) as i64;
         } else {
-            memory_contents = memory[memory_address] as usize;
+            memory_contents = memory[memory_address] as i64;
         }
 
         if mnemonic == "add" {
-            updated_value = memory_contents as usize + value;
+            updated_value = memory_contents + value;
         } else {
-            updated_value = memory_contents as usize - value;
+            updated_value = memory_contents - value;
         }
     }
 
 
 
     if is_word_size && mnemonic != "cmp" {
-        let memory_contents = separate_word_sized_value_into_bytes(updated_value);
+        assert!(updated_value > 0, "we're trying to cast a negative value into an usize.");
+        assert!(updated_value < u16::MAX as i64, "we're trying to cast a value higher than u16 into an u16.");
+        let memory_contents = separate_word_sized_value_into_bytes(updated_value as usize);
 
         // TODO: make sure this is the correct order.
         memory[memory_address] = memory_contents.lower_byte;
         memory[memory_address + 1] = memory_contents.upper_byte; 
     } else {
-        assert!(updated_value < u8::MAX as usize, "we're trying to cast a value higher than u8 into an u8.");
+        assert!(updated_value < u8::MAX as i64, "we're trying to cast a value higher than u8 into an u8.");
         memory[memory_address] = updated_value as u8;
     }
 }
@@ -107,8 +78,8 @@ fn separate_word_sized_value_into_bytes(value: usize) -> word_sized_value_bytes 
     let upper_byte: u8 = ((value >> 8) & 0xFF) as u8;
 
     return word_sized_value_bytes{
-        lower_byte: lower_byte,
-        upper_byte: upper_byte
+        lower_byte,
+        upper_byte
     };
 }
 
