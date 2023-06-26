@@ -3,11 +3,6 @@ mod registers;
 mod flag_registers;
 mod memory;
 
-/* TODO:
-  Expected: mov word [bx + 4], 10
-  Result:   mov word [bx + 4], 35584
-
-*/
 use bits::*;
 
 use crate::memory::{get_16_bit_displacement, get_8_bit_displacement, store_memory_value};
@@ -297,7 +292,13 @@ fn main() {
                 // if w=1 and s=0 and mnemonic is sub/add/cmp, it's an 16-bit immediate.
                 match (mnemonic, is_s_bit_set) {
                     ("mov", _) | ("cmp", false) | ("add", false) | ("sub", false) => {
-                        if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit || memory_mode == DirectMemoryOperation {
+                        if memory_mode == MemoryMode8Bit {
+                            let fourth_byte = binary_contents[instruction_pointer + 3];
+                            let fifth_byte = binary_contents[instruction_pointer + 4];
+                            let combined = combine_bytes(fifth_byte, fourth_byte);
+                            reg_immediate = combined as i64
+                        }
+                        else if memory_mode == MemoryMode16Bit ||  memory_mode == DirectMemoryOperation {
                             // the immediate is guaranteed to be 16-bit because the s bit is set to 0 in this branch.
                             let fifth_byte = binary_contents[instruction_pointer + 4];
                             let sixth_byte = binary_contents[instruction_pointer + 5];
