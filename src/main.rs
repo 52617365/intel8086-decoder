@@ -431,28 +431,24 @@ fn main() {
             let original_memory_contents = load_memory(&memory, memory_mode, rm.original_value as usize, disp, is_word_size);
             let new_memory_contents = load_memory(&memory, memory_mode, rm.updated_value as usize, disp, is_word_size);
             println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, original_memory_contents, new_memory_contents, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
-
         }
         else if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
-            if instruction_is_conditional_jump(instruction) {
-                // we print this out separately because does not modify flags but it relies on them to know when to stop a loop for example so
-                // we don't want to clear it but we still want to signal in the print that it does not modify flags.
+            println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
+        } else if instruction_is_conditional_jump(instruction) {
+            // we print this out separately because does not modify flags but it relies on them to know when to stop a loop for example so
+            // we don't want to clear it but we still want to signal in the print that it does not modify flags.
+            if reg_is_dest {
+                let reg = get_register_state(&reg_register, &registers);
                 println!("{} | {} -> {} | flags: [], IP: {} -> {}", formatted_instruction, reg.original_value, reg.updated_value, instruction_pointer - instruction_size, instruction_pointer);
             } else {
-                println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
+                let rm = get_register_state(&rm_register, &registers);
+                println!("{} | {} -> {} | flags: [], IP: {} -> {}", formatted_instruction, rm.original_value, rm.updated_value, instruction_pointer - instruction_size, instruction_pointer);
             }
         }
         else {
             let rm = get_register_state(&rm_register, &registers);
-
-            if instruction_is_conditional_jump(instruction) {
-                // we print this out separately because does not modify flags but it relies on them to know when to stop a loop for example so
-                // we don't want to clear it but we still want to signal in the print that it does not modify flags.
-                println!("{} | {} -> {} | flags: [], IP: {} -> {}", formatted_instruction, rm.original_value, rm.updated_value, instruction_pointer - instruction_size, instruction_pointer);
-            } else {
-                println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, rm.original_value, rm.updated_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
-            }
+            println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, rm.original_value, rm.updated_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
         }
 
 
