@@ -5,7 +5,7 @@ mod memory;
 
 use bits::*;
 
-use crate::memory::{get_16_bit_displacement, get_8_bit_displacement, store_memory_value};
+use crate::memory::{get_16_bit_displacement, get_8_bit_displacement, get_displacement, load_memory, store_memory_value};
 use crate::bits::combine_bytes;
 use core::panic;
 use std::{env, fs};
@@ -363,14 +363,11 @@ fn main() {
                 // in this branch we can just update the value with the immediate.
                 update_register_value(reg.register, rm_immediate, &mut registers, instruction, memory_mode, mnemonic);
             } else if instruction_uses_memory(memory_mode) {
-                let mut disp = 0;
-                if memory_mode == MemoryMode8Bit {
-                    disp = get_8_bit_displacement(&binary_contents, instruction_pointer);
-                } else if memory_mode == MemoryMode16Bit {
-                    disp = get_16_bit_displacement(&binary_contents, instruction_pointer);
-                }
+                // FIXME: this is not saving memory state correctly.
+                let disp = get_displacement(&binary_contents, instruction_pointer, memory_mode);
+
                 // rm is destination here.
-                let rm = get_register_state(&rm_register, &registers).updated_value; // rm holds the memory address here.
+                let rm = get_register_state(&rm_register, &registers).original_value; // rm holds the memory address here.
                 let value = reg_immediate;
 
                 assert!(rm >= 0, "Memory address is negative and we're casting it to usize: {}", rm);
@@ -381,8 +378,8 @@ fn main() {
                 // in this branch we can just update the value with the immediate.
                 update_register_value(rm.register, reg_immediate, &mut registers, instruction, memory_mode, mnemonic);
             }
-        }
-        else {
+        } else {
+            // TODO: handle memory operations here and make the changes into the memory array instead of the registers vector.
             let reg = get_register_state(&reg_register, &registers);
             let rm = get_register_state(&rm_register, &registers);
             if reg_is_dest {
@@ -400,7 +397,7 @@ fn main() {
                 let mut value: i64 = 0;
 
                 if memory_mode == MemoryModeNoDisplacement || memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
-                    // Handle storing and loading etc and load it into value.
+                    // TODO: Handle storing and loading etc and load it into value.
                 } else {
                     if reg_is_dest && instruction != ImmediateToRegisterMemory {
                         let reg = get_register_state(&reg_register, &registers);
@@ -426,7 +423,17 @@ fn main() {
 
         instruction_pointer += instruction_size;
 
-        if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
+        if instruction_uses_memory(memory_mode) && instruction == ImmediateToRegisterMemory {
+            let disp = get_displacement(&binary_contents, instruction_pointer, memory_mode);
+
+            // rm register contains the dest.
+            let rm = get_register_state(&rm_register, &registers);
+            let original_memory_contents = load_memory(&memory, memory_mode, rm.original_value as usize, disp, is_word_size);
+            let new_memory_contents = load_memory(&memory, memory_mode, rm.updated_value as usize, disp, is_word_size);
+            println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, original_memory_contents, new_memory_contents, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
+
+        }
+        else if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
             if instruction_is_conditional_jump(instruction) {
                 // we print this out separately because does not modify flags but it relies on them to know when to stop a loop for example so
@@ -435,7 +442,8 @@ fn main() {
             } else {
                 println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
             }
-        } else {
+        }
+        else {
             let rm = get_register_state(&rm_register, &registers);
 
             if instruction_is_conditional_jump(instruction) {
@@ -507,22 +515,16 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
             } else {
                 return format!("{} byte [{}], {}", mnemonic, rm_register, reg_immediate);
             }
-        } else if memory_mode == MemoryMode8Bit {
-            let displacement = get_8_bit_displacement(binary_contents, ip);
-            if is_word_size {
-                return format!("{} word [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate);
-            } else {
-                return format!("{} byte [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate);
-            }
-        } else if memory_mode == MemoryMode16Bit {
-            let displacement = get_16_bit_displacement(binary_contents, ip);
+        } else if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
+            let displacement = get_displacement(binary_contents, ip, memory_mode);
+            // let displacement = get_8_bit_displacement(binary_contents, ip);
             if is_word_size {
                 return format!("{} word [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate);
             } else {
                 return format!("{} byte [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate);
             }
         } else if memory_mode == DirectMemoryOperation {
-            let displacement = get_16_bit_displacement(binary_contents, ip);
+            let displacement = get_displacement(binary_contents, ip, memory_mode);
             if is_word_size {
                 // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
                 if reg_is_dest {
@@ -564,15 +566,8 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
             } else {
                 return format!("{} [{}], {}", mnemonic, rm_register, reg_register)
             }
-        } else if memory_mode == MemoryMode8Bit {
-            let disp = get_8_bit_displacement(binary_contents, ip);
-            if reg_is_dest {
-                return format!("{} {}, [{} + {}]", mnemonic, reg_register, rm_register, disp)
-            } else {
-                return format!("{} [{} + {}], {}", mnemonic, rm_register, disp, reg_register)
-            }
-        } else if memory_mode == MemoryMode16Bit {
-            let displacement = get_16_bit_displacement(binary_contents, ip);
+        } else if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
+            let displacement = get_displacement(binary_contents, ip, memory_mode);
             if reg_is_dest {
                 return format!("{} {}, [{} + {}]", mnemonic, reg_register, rm_register, displacement)
             } else {
@@ -585,7 +580,7 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
                 return format!("{} {}, {}", mnemonic, rm_register, reg_register)
             }
         } else if memory_mode == DirectMemoryOperation {
-            let displacement = get_16_bit_displacement(binary_contents, ip);
+            let displacement = get_displacement(binary_contents, ip, memory_mode);
             if is_word_size {
                 return format!("{} {}, word [{}]", mnemonic, reg_register, displacement);
             } else {

@@ -1,4 +1,5 @@
 use crate::bits::{MemoryModeEnum, combine_bytes, InstructionType};
+use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryModeNoDisplacement};
 
 pub fn load_memory(memory: &[u8], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, is_word_size: bool) -> usize {
     assert!(memory_address < memory.len(), "Address was larger than than the available memory.");
@@ -8,7 +9,7 @@ pub fn load_memory(memory: &[u8], memory_mode: MemoryModeEnum, memory_address: u
         memory_address += displacement;
     }
 
-    if memory_mode == MemoryModeEnum::MemoryModeNoDisplacement || memory_mode == MemoryModeEnum::MemoryMode8Bit || memory_mode == MemoryModeEnum::MemoryMode16Bit {
+    if memory_mode == DirectMemoryOperation || memory_mode == MemoryModeEnum::MemoryModeNoDisplacement || memory_mode == MemoryModeEnum::MemoryMode8Bit || memory_mode == MemoryModeEnum::MemoryMode16Bit {
         if is_word_size {
             let first_byte = memory[memory_address];
             let second_byte = memory[memory_address + 1];
@@ -81,6 +82,18 @@ fn separate_word_sized_value_into_bytes(value: usize) -> word_sized_value_bytes 
         lower_byte,
         upper_byte
     };
+}
+
+pub fn get_displacement(binary_contents: &Vec<u8>, i: usize, memory_mode: MemoryModeEnum) -> usize {
+    if memory_mode == MemoryModeNoDisplacement {
+        return 0;
+    } else if memory_mode == MemoryModeEnum::MemoryMode8Bit {
+        return get_8_bit_displacement(binary_contents, i);
+    } else if memory_mode == MemoryModeEnum::MemoryMode16Bit || memory_mode == MemoryModeEnum::DirectMemoryOperation {
+        return get_16_bit_displacement(binary_contents, i);
+    } else {
+        panic!("get_displacement was called when the memory_mode was {:?} and this is unexpected", memory_mode);
+    }
 }
 
 pub fn get_16_bit_displacement(binary_contents: &Vec<u8>, i: usize) -> usize {
