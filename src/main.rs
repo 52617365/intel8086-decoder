@@ -5,7 +5,7 @@ mod memory;
 
 use bits::*;
 
-use crate::memory::{get_16_bit_displacement, get_8_bit_displacement, get_displacement, load_memory, store_memory_value};
+use crate::memory::{get_displacement, get_memory_contents_as_decimal_and_update_original_value, memory_contents, memory_struct, store_memory_value};
 use crate::bits::combine_bytes;
 use core::panic;
 use std::{env, fs};
@@ -260,7 +260,7 @@ fn main() {
     let op_codes = construct_opcodes();
     let mut registers = construct_registers();
     let mut flag_registers = construct_flag_registers();
-    let mut memory : [u8; 64000] = [0; 64000];
+    let mut memory : [memory_struct; 64000] = [memory_struct { address_contents: memory_contents{modified_bits:0, original_bits: 0}}; 64000];
 
     let mut instruction_pointer: usize = 0;
     while instruction_pointer < binary_contents.len() {
@@ -298,7 +298,7 @@ fn main() {
                             let combined = combine_bytes(fifth_byte, fourth_byte);
                             reg_immediate = combined as i64
                         }
-                        else if memory_mode == MemoryMode16Bit ||  memory_mode == DirectMemoryOperation {
+                        else if memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {
                             // the immediate is guaranteed to be 16-bit because the s bit is set to 0 in this branch.
                             let fifth_byte = binary_contents[instruction_pointer + 4];
                             let sixth_byte = binary_contents[instruction_pointer + 5];
@@ -338,56 +338,45 @@ fn main() {
             reg_register = get_register(true, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
         }
 
-        // This case is actually the complete opposite from the previous one.
-        // The immediate to register MOV instruction actually does not have the R/M register
-        // but has the REG register it used to move immediate values to.
-        if instruction == ImmediateToRegisterMOV {
-            // and the R/M Register actually is not used at all with the MOV immediate instruction.
+        if memory_mode != DirectMemoryOperation {
+            // This case is actually the complete opposite from the previous one.
+            // The immediate to register MOV instruction actually does not have the R/M register
+            // but has the REG register it used to move immediate values to.
+            if instruction == ImmediateToRegisterMOV {
+                // and the R/M Register actually is not used at all with the MOV immediate instruction.
 
-            // With the immediate to register mov instruction, the immediate is stored in the second (and third byte if word sized).
-            if is_word_size {
-                let third_byte = binary_contents[instruction_pointer + 2];
-                let combined = combine_bytes(third_byte, second_byte);
-                rm_immediate = combined as i64
+                // With the immediate to register mov instruction, the immediate is stored in the second (and third byte if word sized).
+                if is_word_size {
+                    let third_byte = binary_contents[instruction_pointer + 2];
+                    let combined = combine_bytes(third_byte, second_byte);
+                    rm_immediate = combined as i64
+                } else {
+                    rm_immediate = second_byte as i64
+                }
             } else {
-                rm_immediate = second_byte as i64
+                // In this case its actually not an immediate, instead the string gets populated with the R/M register.
+                rm_register = get_register(false, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
             }
-        } else {
-            // In this case its actually not an immediate, instead the string gets populated with the R/M register.
-            rm_register = get_register(false, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
         }
 
         if instruction_is_immediate_to_register(instruction) {
-            if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
+            if instruction_uses_memory(memory_mode) {
+                let disp = get_displacement(&binary_contents, instruction_pointer, memory_mode);
+                let value = reg_immediate;
+                if memory_mode == DirectMemoryOperation {
+                    store_memory_value(&mut memory, memory_mode, 0, disp, value, mnemonic, is_word_size);
+                } else {
+                    let rm = get_register_state(&rm_register, &registers).updated_value; // rm holds the memory address here.
+                    store_memory_value(&mut memory, memory_mode, usize::try_from(rm).unwrap(), disp, value, mnemonic, is_word_size);
+                }
+            } else if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
                 let reg = get_register_state(&reg_register, &registers);
                 // in this branch we can just update the value with the immediate.
                 update_register_value(reg.register, rm_immediate, &mut registers, instruction, memory_mode, mnemonic);
-            } else if instruction_uses_memory(memory_mode) {
-                // FIXME: this is not saving memory state correctly.
-                let disp = get_displacement(&binary_contents, instruction_pointer, memory_mode);
-
-                // rm is destination here.
-                let rm = get_register_state(&rm_register, &registers).original_value; // rm holds the memory address here.
-                let value = reg_immediate;
-
-                assert!(rm >= 0, "Memory address is negative and we're casting it to usize: {}", rm);
-                store_memory_value(&mut memory, memory_mode, rm as usize, disp, value, instruction, mnemonic, is_word_size);
-            }
-            else {
-                let rm = get_register_state(&rm_register, &registers);
-                // in this branch we can just update the value with the immediate.
-                update_register_value(rm.register, reg_immediate, &mut registers, instruction, memory_mode, mnemonic);
-            }
-        } else {
-            // TODO: handle memory operations here and make the changes into the memory array instead of the registers vector.
-            let reg = get_register_state(&reg_register, &registers);
-            let rm = get_register_state(&rm_register, &registers);
-            if reg_is_dest {
-                update_register_value(reg.register, rm.updated_value, &mut registers, instruction, memory_mode, mnemonic);
             } else {
                 let rm = get_register_state(&rm_register, &registers);
                 // in this branch we can just update the value with the immediate.
-                update_register_value(rm.register, reg.updated_value, &mut registers, instruction, memory_mode, mnemonic);
+                update_register_value(rm.register, reg_immediate, &mut registers, instruction, memory_mode, mnemonic);
             }
         }
 
@@ -423,14 +412,20 @@ fn main() {
 
         instruction_pointer += instruction_size;
 
-        if instruction_uses_memory(memory_mode) && instruction == ImmediateToRegisterMemory {
-            let disp = get_displacement(&binary_contents, instruction_pointer, memory_mode);
+        if instruction == ImmediateToRegisterMemory && instruction_uses_memory(memory_mode) {
+            let old_instruction_pointer = instruction_pointer - instruction_size;
+            let disp = get_displacement(&binary_contents, old_instruction_pointer, memory_mode);
 
-            // rm register contains the dest.
-            let rm = get_register_state(&rm_register, &registers);
-            let original_memory_contents = load_memory(&memory, memory_mode, rm.original_value as usize, disp, is_word_size);
-            let new_memory_contents = load_memory(&memory, memory_mode, rm.updated_value as usize, disp, is_word_size);
-            println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, original_memory_contents, new_memory_contents, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
+            if memory_mode == DirectMemoryOperation {
+                let decimal_memory_contents = get_memory_contents_as_decimal_and_update_original_value(&mut memory, memory_mode, 0, disp, is_word_size);
+                println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, decimal_memory_contents.original_value, decimal_memory_contents.modified_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
+            } else {
+                // rm register contains the dest.
+                let rm = get_register_state(&rm_register, &registers);
+
+                let decimal_memory_contents = get_memory_contents_as_decimal_and_update_original_value(&mut memory, memory_mode, rm.updated_value as usize, disp, is_word_size);
+                println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, decimal_memory_contents.original_value, decimal_memory_contents.modified_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
+            }
         }
         else if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
@@ -455,6 +450,9 @@ fn main() {
         if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
             update_original_register_value(reg.register, reg.updated_value, &mut registers);
+        } else if instruction_uses_memory(memory_mode) {
+            // NOTE: We update the original_bits of memory inside the get_memory_contents_as_decimal_and_update_original_value function that
+            //  returns a struct of the original and updated_value, should we do the same with registers? It could be easier that way.
         } else {
             let rm = get_register_state(&rm_register, &registers);
             update_original_register_value(rm.register, rm.updated_value, &mut registers);
