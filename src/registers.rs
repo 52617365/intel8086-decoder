@@ -35,27 +35,26 @@ pub fn get_register_state<'a>(register: &String, registers: &'a Vec<Register>) -
 }
 
 pub fn update_register_value(register_to_update: &'static str, value: i64, registers: &mut Vec<Register>, instruction: InstructionType, memory_mode: MemoryModeEnum, mnemonic: &'static str) -> () {
-    for reg in registers.iter_mut() {
-        if reg.register == register_to_update {
+    for register in registers.iter_mut() {
+        if register.register == register_to_update {
             match instruction {
-                ImmediateToAccumulatorADD => reg.updated_value += value,
-                ImmediateToAccumulatorSUB => reg.updated_value -= value,
+                ImmediateToAccumulatorADD => register.updated_value += value,
+                ImmediateToAccumulatorSUB => register.updated_value -= value,
                 ImmediateToRegisterMemory | RegisterMemory => {
                     match memory_mode {
-                        MemoryModeEnum::RegisterMode => {
+                        MemoryModeEnum::RegisterMode | MemoryModeEnum::MemoryModeNoDisplacement | MemoryModeEnum::MemoryMode8Bit | MemoryModeEnum::MemoryMode16Bit | MemoryModeEnum::DirectMemoryOperation => {
                             match mnemonic {
-                                "mov" => reg.updated_value = value,
-                                "add" => reg.updated_value += value,
-                                "sub" => reg.updated_value -= value,
+                                "mov" => register.updated_value = value,
+                                "add" => register.updated_value += value,
+                                "sub" => register.updated_value -= value,
                                 "cmp" => (),
                                 _ => panic!("Unknown mnemonic {}", mnemonic),
                             }
                         }
-                        MemoryModeEnum::MemoryModeNoDisplacement | MemoryModeEnum::MemoryMode8Bit | MemoryModeEnum::MemoryMode16Bit | MemoryModeEnum::DirectMemoryOperation => (),
                     }
                     return
                 },
-                ImmediateToRegisterMOV => reg.updated_value = value,
+                ImmediateToRegisterMOV => register.updated_value = value,
                 _ => () // Conditional jumps, CMP instructions.
             }
             return

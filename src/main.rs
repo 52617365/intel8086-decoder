@@ -5,7 +5,7 @@ mod memory;
 
 use bits::*;
 
-use crate::memory::{get_displacement, get_memory_contents_as_decimal_and_update_original_value, memory_contents, memory_struct, store_memory_value};
+use crate::memory::{get_displacement, get_memory_contents_as_decimal_and_optionally_update_original_value, memory_contents, memory_struct, store_memory_value};
 use crate::bits::combine_bytes;
 use core::panic;
 use std::{env, fs};
@@ -379,6 +379,20 @@ fn main() {
                 update_register_value(rm.register, reg_immediate, &mut registers, instruction, memory_mode, mnemonic);
             }
         } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
+            let memory_address_displacement = get_displacement(&binary_contents, instruction_pointer, memory_mode);
+            if memory_mode == DirectMemoryOperation {
+                if reg_is_dest {
+                    let reg = get_register_state(&reg_register, &registers);
+                    let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(&mut memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
+                    update_register_value(reg.register, memory_contents.modified_value as i64, &mut registers, instruction, memory_mode, mnemonic);
+                } else {
+                    let rm = get_register_state(&rm_register, &registers);
+                    let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(&mut memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
+                    update_register_value(rm.register, memory_contents.modified_value as i64, &mut registers, instruction, memory_mode, mnemonic);
+                }
+            } else {
+                todo!()
+            }
             // TODO: in order for the mov bx, word [1000] instructions so work, we have to store it in this branch.
         }
 
@@ -419,13 +433,13 @@ fn main() {
             let disp = get_displacement(&binary_contents, old_instruction_pointer, memory_mode);
 
             if memory_mode == DirectMemoryOperation {
-                let decimal_memory_contents = get_memory_contents_as_decimal_and_update_original_value(&mut memory, memory_mode, 0, disp, is_word_size);
+                let decimal_memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(&mut memory, memory_mode, 0, disp, is_word_size, true);
                 println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, decimal_memory_contents.original_value, decimal_memory_contents.modified_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
             } else {
                 // rm register contains the dest.
                 let rm = get_register_state(&rm_register, &registers);
 
-                let decimal_memory_contents = get_memory_contents_as_decimal_and_update_original_value(&mut memory, memory_mode, rm.updated_value as usize, disp, is_word_size);
+                let decimal_memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(&mut memory, memory_mode, rm.updated_value as usize, disp, is_word_size, true);
                 println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, decimal_memory_contents.original_value, decimal_memory_contents.modified_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
             }
         }

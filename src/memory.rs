@@ -28,7 +28,7 @@ pub struct decimal_memory_contents {
     pub modified_value: usize,
 }
 
-pub fn get_memory_contents_as_decimal_and_update_original_value(memory: &mut [memory_struct], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, is_word_size: bool) -> decimal_memory_contents {
+pub fn get_memory_contents_as_decimal_and_optionally_update_original_value(memory: &mut [memory_struct], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, is_word_size: bool, update_original_value: bool) -> decimal_memory_contents {
     assert!(memory_address < memory.len(), "Address was larger than than the available memory.");
 
     let mut m_memory_address = memory_address;
@@ -46,8 +46,10 @@ pub fn get_memory_contents_as_decimal_and_update_original_value(memory: &mut [me
                 original_value: original_value_combined as usize,
                 modified_value: modified_value_combined as usize,
             };
-            memory[m_memory_address].address_contents.original_bits = memory[m_memory_address].address_contents.modified_bits;
-            memory[m_memory_address + 1].address_contents.original_bits = memory[m_memory_address + 1].address_contents.modified_bits;
+            if update_original_value { // This is true only when the destination is a memory location.
+                memory[m_memory_address].address_contents.original_bits = memory[m_memory_address].address_contents.modified_bits;
+                memory[m_memory_address + 1].address_contents.original_bits = memory[m_memory_address + 1].address_contents.modified_bits;
+            }
             return decimal_memory_contents;
         } else {
             let address_with_displacement = m_memory_address + displacement;
@@ -58,7 +60,10 @@ pub fn get_memory_contents_as_decimal_and_update_original_value(memory: &mut [me
                 original_value: original_value as usize,
                 modified_value: modified_value as usize,
             };
-            memory[m_memory_address].address_contents.original_bits = memory[m_memory_address].address_contents.modified_bits;
+
+            if update_original_value { // This is true only when the destination is a memory location.
+                memory[m_memory_address].address_contents.original_bits = memory[m_memory_address].address_contents.modified_bits;
+            }
 
             return decimal_memory_contents;
         }
