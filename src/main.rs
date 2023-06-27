@@ -378,6 +378,8 @@ fn main() {
                 // in this branch we can just update the value with the immediate.
                 update_register_value(rm.register, reg_immediate, &mut registers, instruction, memory_mode, mnemonic);
             }
+        } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
+            // TODO: in order for the mov bx, word [1000] instructions so work, we have to store it in this branch.
         }
 
 
@@ -457,7 +459,6 @@ fn main() {
             let rm = get_register_state(&rm_register, &registers);
             update_original_register_value(rm.register, rm.updated_value, &mut registers);
         }
-
 
         if instruction_is_conditional_jump(instruction) {
             perform_conditional_jump(&mut flag_registers, &mut instruction_pointer, second_byte, instruction);
