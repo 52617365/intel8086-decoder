@@ -72,8 +72,6 @@ pub fn get_memory_contents_as_decimal_and_optionally_update_original_value(memor
     }
 }
 
-// TODO: store_memory_value currently has a problem where subtractions can go under 0. this is bad
-// because we need to do shift operations on the numbers and it will lead to unexpected shit.
 pub fn store_memory_value(memory: &mut [memory_struct], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, value: i64, mnemonic: &'static str, is_word_size: bool) -> () {
     let mut updated_memory_address = memory_address;
     if memory_mode == MemoryModeEnum::MemoryMode8Bit || memory_mode == MemoryModeEnum::MemoryMode16Bit || memory_mode == MemoryModeEnum::DirectMemoryOperation {

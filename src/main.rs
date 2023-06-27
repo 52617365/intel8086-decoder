@@ -391,9 +391,9 @@ fn main() {
                     update_register_value(rm.register, memory_contents.modified_value as i64, &mut registers, instruction, memory_mode, mnemonic);
                 }
             } else {
+                // NOTE: this is not implemented. Will implement if we need to in future homework.
                 todo!()
             }
-            // TODO: in order for the mov bx, word [1000] instructions so work, we have to store it in this branch.
         }
 
 
@@ -401,8 +401,20 @@ fn main() {
             if mnemonic != "mov" {
                 let mut value: i64 = 0;
 
-                if memory_mode == MemoryModeNoDisplacement || memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
-                    // TODO: Handle storing and loading etc and load it into value.
+                if instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) /*|| memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation */{
+                    // rm register is always dest.
+                    let rm = get_register_state(&rm_register, &registers);
+                    value = rm.updated_value;
+                } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
+                    if memory_mode == DirectMemoryOperation {
+                        if reg_is_dest {
+                            let reg = get_register_state(&reg_register, &registers);
+                            value = reg.updated_value;
+                        } else {
+                            let rm = get_register_state(&rm_register, &registers);
+                            value = rm.updated_value;
+                        }
+                    }
                 } else {
                     if reg_is_dest && instruction != ImmediateToRegisterMemory {
                         let reg = get_register_state(&reg_register, &registers);
@@ -416,7 +428,7 @@ fn main() {
                 if value >= 0 {
                     set_flags(value, &mut flag_registers, is_word_size);
                 } else {
-                    return
+                    return // NOTE: This avoids +1 instruction, is there a way to do this in a better way?
                 }
             } else {
                 // We don't clear if it's a conditional jump because the jnz conditional jump for example relies on the flags to know when to stop jumping.
