@@ -401,7 +401,7 @@ fn main() {
             if mnemonic != "mov" {
                 let mut value: i64 = 0;
 
-                if instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) /*|| memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation */{
+                if instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) {
                     // rm register is always dest.
                     let rm = get_register_state(&rm_register, &registers);
                     value = rm.updated_value;
