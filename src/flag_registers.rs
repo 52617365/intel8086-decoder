@@ -1,3 +1,4 @@
+#[derive(Copy, Clone)]
 pub struct FlagRegister {
     pub register: &'static str,
     pub is_set: bool,
@@ -63,7 +64,7 @@ pub fn set_flags(destination_value: i64, flag_registers: &mut [FlagRegister], is
     }
 }
 
-pub fn get_all_currently_set_flags(flag_registers: &[FlagRegister]) -> Vec<&str> {
+pub fn get_all_currently_set_flags(flag_registers: [FlagRegister; 2]) -> Vec<&'static str> {
     let mut flags: Vec<&str> = Vec::with_capacity(flag_registers.len());
     for flag_register in flag_registers.iter() {
         if flag_register.is_set {

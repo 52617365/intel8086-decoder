@@ -1,5 +1,5 @@
 use crate::bits::{MemoryModeEnum, combine_bytes, InstructionType};
-use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryModeNoDisplacement};
+use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement};
 
 // The memory struct is used by the main loop to simulate memory.
 // It's simulated by holding a large array of memory structs.
@@ -28,15 +28,22 @@ pub struct decimal_memory_contents {
     pub modified_value: usize,
 }
 
+// Some instructions have a displacement which means the memory address is actually the memory address + displacement. We're handling it in this function.
+fn adjust_memory_address(memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize) -> usize {
+    match memory_mode {
+        MemoryModeEnum::MemoryMode8Bit | MemoryModeEnum::MemoryMode16Bit | DirectMemoryOperation => {
+            memory_address + displacement
+        },
+        _ => memory_address,
+    }
+}
+
 pub fn get_memory_contents_as_decimal_and_optionally_update_original_value(memory: &mut [memory_struct], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, is_word_size: bool, update_original_value: bool) -> decimal_memory_contents {
     assert!(memory_address < memory.len(), "Address was larger than than the available memory.");
 
-    let mut m_memory_address = memory_address;
-    if memory_mode == MemoryModeEnum::MemoryMode8Bit || memory_mode == MemoryModeEnum::MemoryMode16Bit || memory_mode == MemoryModeEnum::DirectMemoryOperation {
-        m_memory_address += displacement;
-    }
+    let m_memory_address = adjust_memory_address(memory_mode, memory_address, displacement);
 
-    if memory_mode == DirectMemoryOperation || memory_mode == MemoryModeEnum::MemoryModeNoDisplacement || memory_mode == MemoryModeEnum::MemoryMode8Bit || memory_mode == MemoryModeEnum::MemoryMode16Bit {
+    if memory_mode == DirectMemoryOperation || memory_mode == MemoryModeNoDisplacement || memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
         if is_word_size {
             let first_byte = memory[m_memory_address];
             let second_byte = memory[m_memory_address + 1];
@@ -140,14 +147,14 @@ pub fn get_displacement(binary_contents: &Vec<u8>, i: usize, memory_mode: Memory
     }
 }
 
-pub fn get_16_bit_displacement(binary_contents: &Vec<u8>, i: usize) -> usize {
+fn get_16_bit_displacement(binary_contents: &Vec<u8>, i: usize) -> usize {
     let first_disp = binary_contents[i + 2];
     let second_disp = binary_contents[i + 3];
     let displacement = combine_bytes(second_disp, first_disp);
     displacement as usize
 }
 
-pub fn get_8_bit_displacement(binary_contents: &Vec<u8>, i: usize) -> usize {
+fn get_8_bit_displacement(binary_contents: &Vec<u8>, i: usize) -> usize {
     let first_disp = binary_contents[i + 2];
     return first_disp as usize
 }

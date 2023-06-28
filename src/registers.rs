@@ -13,16 +13,11 @@ const REGISTERS: [&str; 16] = [
 ];
 
 pub fn construct_registers() -> Vec<Register>{
-    let mut registers: Vec<Register> = Vec::with_capacity(REGISTERS.len());
-
-    for register in REGISTERS.iter() {
-        registers.push( Register {
-            register,
-            updated_value: 0,
-            original_value: 0,
-        });
-    }
-    return registers;
+    REGISTERS.iter().map(|&register| Register {
+        register,
+        updated_value: 0,
+        original_value: 0,
+    }).collect()
 }
 
 pub fn get_register_state<'a>(register: &String, registers: &'a Vec<Register>) -> &'a Register {
