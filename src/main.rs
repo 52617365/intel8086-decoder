@@ -13,13 +13,15 @@ use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumul
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
-use crate::registers::{construct_registers, get_register_state, update_original_register_value, update_register_value};
+use crate::registers::{construct_registers, get_register_state, Register, update_original_register_value, update_register_value};
 use crate::flag_registers::{construct_flag_registers, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, twos_complement, FlagRegister};
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
 // This function does not work with the immediate to registers because they use the s bit also, we have to take into consideration
 // that bit separately.
-fn is_word_size(first_byte: u8, inst_type: InstructionType) -> bool { return if inst_type == ImmediateToRegisterMOV { first_byte & IMMEDIATE_TO_REG_MOV_W_BIT as u8 != 0
+fn is_word_size(first_byte: u8, inst_type: InstructionType) -> bool {
+    return if inst_type == ImmediateToRegisterMOV {
+        first_byte & IMMEDIATE_TO_REG_MOV_W_BIT as u8 != 0
     } else {
         first_byte & Masks::W_BIT as u8 != 0
     }
@@ -124,13 +126,8 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
         {
             return match rm_res {
                 // NOTE:
-                // When calling this function, we then check what the memory_mode was
-                // to see what the displacement should be.
-                // It will be either none, 8-bits or 16-bits depending on the result.
-                // Here it will be either 8 or 16-bits.
-                // the displacement is then added after the registers.
+                // The displacement is added after the registers.
 
-                // we get the register from the r/m field.
                 0b_00_000_000 => "bx + si",
                 0b_00_000_001 => "bx + di",
                 0b_00_000_010 => "bp + si",
@@ -145,7 +142,7 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
             };
         } else if memory_mode == DirectMemoryOperation {
             // 00 + 110 RM
-            "" // we return an empty string because MEMORY_MODE_DIRECT does not have a register, instead it's a direct 16-bit address that will be fetched later.
+            "" // we return an empty string because DirectMemoryOperation does not have a register, instead it's a direct 16-bit address that will be fetched later.
         } else {
             panic!("Unsupported operation - get_register - {:?}, first_byte: {:8b}, second_byte: {:8b}, memory_mode: {:?}", inst, first_byte, second_byte, memory_mode)
         }
@@ -259,12 +256,14 @@ fn main() {
     let binary_contents = fs::read(binary_path).unwrap();
     let op_codes = construct_opcodes();
     let mut registers = construct_registers();
-    let mut flag_registers = construct_flag_registers();
-    let mut memory : [memory_struct; 64000] = [memory_struct { address_contents: memory_contents{modified_bits:0, original_bits: 0}}; 64000];
+    let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: 0, original_bits: 0 } }; 64000];
+    let flag_registers = construct_flag_registers();
+    decode(&binary_contents, &op_codes, &mut registers, flag_registers, &mut memory);
+}
 
+fn decode(binary_contents: &Vec<u8>, op_codes: &Vec<OpCode>, registers: &mut Vec<Register>, mut flag_registers: [FlagRegister; 2], memory: &mut [memory_struct; 64000]) -> bool {
     let mut instruction_pointer: usize = 0;
     while instruction_pointer < binary_contents.len() {
-
         let first_byte = binary_contents[instruction_pointer];
         let second_byte = binary_contents[instruction_pointer + 1];
 
@@ -297,8 +296,7 @@ fn main() {
                             let fifth_byte = binary_contents[instruction_pointer + 4];
                             let combined = combine_bytes(fifth_byte, fourth_byte);
                             reg_immediate = combined as i64
-                        }
-                        else if memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {
+                        } else if memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {
                             // the immediate is guaranteed to be 16-bit because the s bit is set to 0 in this branch.
                             let fifth_byte = binary_contents[instruction_pointer + 4];
                             let sixth_byte = binary_contents[instruction_pointer + 5];
@@ -364,31 +362,31 @@ fn main() {
                 let disp = get_displacement(&binary_contents, instruction_pointer, memory_mode);
                 let value = reg_immediate;
                 if memory_mode == DirectMemoryOperation {
-                    store_memory_value(&mut memory, memory_mode, 0, disp, value, mnemonic, is_word_size);
+                    store_memory_value(memory, memory_mode, 0, disp, value, mnemonic, is_word_size);
                 } else {
                     let rm = get_register_state(&rm_register, &registers).updated_value; // rm holds the memory address here.
-                    store_memory_value(&mut memory, memory_mode, usize::try_from(rm).unwrap(), disp, value, mnemonic, is_word_size);
+                    store_memory_value(memory, memory_mode, usize::try_from(rm).unwrap(), disp, value, mnemonic, is_word_size);
                 }
             } else if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
                 let reg = get_register_state(&reg_register, &registers);
                 // in this branch we can just update the value with the immediate.
-                update_register_value(reg.register, rm_immediate, &mut registers, instruction, memory_mode, mnemonic);
+                update_register_value(reg.register, rm_immediate, registers, instruction, memory_mode, mnemonic);
             } else {
                 let rm = get_register_state(&rm_register, &registers);
                 // in this branch we can just update the value with the immediate.
-                update_register_value(rm.register, reg_immediate, &mut registers, instruction, memory_mode, mnemonic);
+                update_register_value(rm.register, reg_immediate, registers, instruction, memory_mode, mnemonic);
             }
         } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
             let memory_address_displacement = get_displacement(&binary_contents, instruction_pointer, memory_mode);
             if memory_mode == DirectMemoryOperation {
                 if reg_is_dest {
                     let reg = get_register_state(&reg_register, &registers);
-                    let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(&mut memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
-                    update_register_value(reg.register, memory_contents.modified_value as i64, &mut registers, instruction, memory_mode, mnemonic);
+                    let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
+                    update_register_value(reg.register, memory_contents.modified_value as i64, registers, instruction, memory_mode, mnemonic);
                 } else {
                     let rm = get_register_state(&rm_register, &registers);
-                    let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(&mut memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
-                    update_register_value(rm.register, memory_contents.modified_value as i64, &mut registers, instruction, memory_mode, mnemonic);
+                    let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
+                    update_register_value(rm.register, memory_contents.modified_value as i64, registers, instruction, memory_mode, mnemonic);
                 }
             } else {
                 // NOTE: this is not implemented. Will implement if we need to in future homework.
@@ -428,7 +426,7 @@ fn main() {
                 if value >= 0 {
                     set_flags(value, &mut flag_registers, is_word_size);
                 } else {
-                    return // NOTE: This avoids +1 instruction, is there a way to do this in a better way?
+                    return true // NOTE: This avoids +1 instruction, is there a way to do this in a better way?
                 }
             } else {
                 // We don't clear if it's a conditional jump because the jnz conditional jump for example relies on the flags to know when to stop jumping.
@@ -445,17 +443,16 @@ fn main() {
             let disp = get_displacement(&binary_contents, old_instruction_pointer, memory_mode);
 
             if memory_mode == DirectMemoryOperation {
-                let decimal_memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(&mut memory, memory_mode, 0, disp, is_word_size, true);
+                let decimal_memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, 0, disp, is_word_size, true);
                 println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, decimal_memory_contents.original_value, decimal_memory_contents.modified_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
             } else {
                 // rm register contains the dest.
                 let rm = get_register_state(&rm_register, &registers);
 
-                let decimal_memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(&mut memory, memory_mode, rm.updated_value as usize, disp, is_word_size, true);
+                let decimal_memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, rm.updated_value as usize, disp, is_word_size, true);
                 println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, decimal_memory_contents.original_value, decimal_memory_contents.modified_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
             }
-        }
-        else if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
+        } else if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
             println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, reg.original_value, reg.updated_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
         } else if instruction_is_conditional_jump(instruction) {
@@ -468,8 +465,7 @@ fn main() {
                 let rm = get_register_state(&rm_register, &registers);
                 println!("{} | {} -> {} | flags: [], IP: {} -> {}", formatted_instruction, rm.original_value, rm.updated_value, instruction_pointer - instruction_size, instruction_pointer);
             }
-        }
-        else {
+        } else {
             let rm = get_register_state(&rm_register, &registers);
             println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", formatted_instruction, rm.original_value, rm.updated_value, get_all_currently_set_flags(&flag_registers), instruction_pointer - instruction_size, instruction_pointer);
         }
@@ -477,19 +473,20 @@ fn main() {
 
         if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, &registers);
-            update_original_register_value(reg.register, reg.updated_value, &mut registers);
+            update_original_register_value(reg.register, reg.updated_value, registers);
         } else if instruction_uses_memory(memory_mode) {
             // NOTE: We update the original_bits of memory inside the get_memory_contents_as_decimal_and_update_original_value function that
             //  returns a struct of the original and updated_value, should we do the same with registers? It could be easier that way.
         } else {
             let rm = get_register_state(&rm_register, &registers);
-            update_original_register_value(rm.register, rm.updated_value, &mut registers);
+            update_original_register_value(rm.register, rm.updated_value, registers);
         }
 
         if instruction_is_conditional_jump(instruction) {
             perform_conditional_jump(&mut flag_registers, &mut instruction_pointer, second_byte, instruction);
         }
     }
+    false
 }
 
 fn perform_conditional_jump(flag_registers: &mut [FlagRegister; 2], instruction_pointer: &mut usize, second_byte: u8, instruction: InstructionType) {
