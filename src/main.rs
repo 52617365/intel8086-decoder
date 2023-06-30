@@ -381,7 +381,12 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         }
     }
 
-    if instruction_is_immediate_to_register(instruction) && instruction != ImmediateToRegisterMOV {
+    if instruction == ImmediateToRegisterMOV {
+        // With the ImmediateToRegisterMOV instruction, get_reg does not matter at all.
+        let reg = get_register_state(&reg_register, &registers);
+        update_register_value(reg.register, rm_immediate, registers, instruction, memory_mode, mnemonic);
+    }
+    else if instruction_is_immediate_to_register(instruction) && instruction != ImmediateToRegisterMOV {
         if instruction_uses_memory(memory_mode) {
             let disp = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
             let value = reg_immediate;
@@ -408,6 +413,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                 update_register_value(reg.register, memory_contents.modified_value as i64, registers, instruction, memory_mode, mnemonic);
             } else {
                 // FIXME: this does not work when its memory mode no displacement and rm_register is bx + di
+                // TODO: handle the case where we have something like bx + di.
                 let rm = get_register_state(&rm_register, registers);
                 let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
                 update_register_value(rm.register, memory_contents.modified_value as i64, registers, instruction, memory_mode, mnemonic);
