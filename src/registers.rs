@@ -27,6 +27,7 @@ pub fn register_contains_multiple_registers(register: &str) -> bool {
 }
 
 pub fn get_register_state(register: &str, registers: &Vec<Register>) -> Register {
+    assert!(!register_contains_multiple_registers(register), "Register contained multiple registers, it should be handled in the caller.");
     for reg in registers.iter() {
         if reg.register == register {
             return reg.clone()
