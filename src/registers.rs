@@ -22,6 +22,10 @@ pub fn construct_registers() -> Vec<Register>{
 }
 
 
+pub fn register_contains_multiple_registers(register: &str) -> bool {
+    return register.contains("+") || register.contains("-")
+}
+
 pub fn get_register_state(register: &str, registers: &Vec<Register>) -> Register {
     for reg in registers.iter() {
         if reg.register == register {
@@ -29,6 +33,24 @@ pub fn get_register_state(register: &str, registers: &Vec<Register>) -> Register
         }
     }
     panic!("Register not found, this should never happen. Register that was not found was {}", register);
+    // if register_contains_multiple_registers(register) {
+    //     let split_register : Vec<&str>= register.split(|c| c == '+' || c == '-').collect();
+    //     let first_register = get_register_value(split_register[0], registers);
+    //     let second_register = get_register_value(split_register[1], registers);
+    //     let register_value_result: i64;
+    //     if register.contains("+") {
+    //         register_value_result = first_register.original_value + second_register.original_value;
+    //     } else {
+    //         register_value_result = first_register.original_value - second_register.original_value;
+    //     }
+    //     return Register{
+    //         register,
+    //         updated_value: register_value_result,
+    //         original_value: 0,
+    //         register_used_for_memory_operation: true,
+    //     }
+    // } else {
+    // }
 }
 
 pub fn update_register_value(register_to_update: &str, value: i64, registers: &mut Vec<Register>, instruction: InstructionType, memory_mode: MemoryModeEnum, mnemonic: &'static str) -> () {

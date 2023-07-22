@@ -31,14 +31,14 @@ pub struct decimal_memory_contents {
 // Some instructions have a displacement which means the memory address is actually the memory address + displacement. We're handling it in this function.
 fn adjust_memory_address(memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize) -> usize {
     match memory_mode {
-        MemoryModeEnum::MemoryMode8Bit | MemoryModeEnum::MemoryMode16Bit | DirectMemoryOperation => {
+        MemoryMode8Bit | MemoryMode16Bit | DirectMemoryOperation => {
             memory_address + displacement
         },
         _ => memory_address,
     }
 }
 
-pub fn get_memory_contents_as_decimal_and_optionally_update_original_value(memory: &mut [memory_struct], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, is_word_size: bool, update_original_value: bool) -> decimal_memory_contents {
+pub fn load_memory_contents_as_decimal_and_optionally_update_original_value(memory: &mut [memory_struct], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, is_word_size: bool, update_original_value: bool) -> decimal_memory_contents {
     assert!(memory_address < memory.len(), "Address was larger than than the available memory.");
 
     let m_memory_address = adjust_memory_address(memory_mode, memory_address, displacement);
@@ -81,7 +81,7 @@ pub fn get_memory_contents_as_decimal_and_optionally_update_original_value(memor
 
 pub fn store_memory_value(memory: &mut [memory_struct], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, value: i64, mnemonic: &'static str, is_word_size: bool) -> () {
     let mut updated_memory_address = memory_address;
-    if memory_mode == MemoryModeEnum::MemoryMode8Bit || memory_mode == MemoryModeEnum::MemoryMode16Bit || memory_mode == MemoryModeEnum::DirectMemoryOperation {
+    if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {
         updated_memory_address += displacement;
     }
 
@@ -113,7 +113,7 @@ pub fn store_memory_value(memory: &mut [memory_struct], memory_mode: MemoryModeE
         memory[updated_memory_address + 1].address_contents.modified_bits = memory_contents.upper_byte;
     } else {
         assert!(updated_value < u8::MAX as i64, "we're trying to cast a value higher than u8 into an u8.");
-        assert!(updated_value > 0, "we're trying to cast a negative number into unsigned.");
+        assert!(updated_value >= 0, "we're trying to cast a negative number into unsigned.");
         memory[updated_memory_address].address_contents.modified_bits = updated_value as u8;
     }
 }
@@ -158,3 +158,5 @@ fn get_8_bit_displacement(binary_contents: &Vec<u8>, i: usize) -> usize {
     let first_disp = binary_contents[i + 2];
     return first_disp as usize
 }
+
+// pub fn get_memory_location_from_register_containing_multiple_registers(register: &str, registers: &Vec<Register>, )
