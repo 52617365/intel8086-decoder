@@ -138,9 +138,9 @@ pub fn separate_word_sized_value_into_bytes(value: usize) -> word_sized_value_by
 pub fn get_displacement(binary_contents: &Vec<u8>, i: usize, memory_mode: MemoryModeEnum) -> usize {
     if memory_mode == MemoryModeNoDisplacement {
         return 0;
-    } else if memory_mode == MemoryModeEnum::MemoryMode8Bit {
+    } else if memory_mode == MemoryMode8Bit {
         return get_8_bit_displacement(binary_contents, i);
-    } else if memory_mode == MemoryModeEnum::MemoryMode16Bit || memory_mode == MemoryModeEnum::DirectMemoryOperation {
+    } else if memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {
         return get_16_bit_displacement(binary_contents, i);
     } else {
         panic!("get_displacement was called when the memory_mode was {:?} and this is unexpected", memory_mode);

@@ -288,6 +288,92 @@ struct instruction_data {
    updated_instruction_pointer: usize,
 }
 
+fn instruction_has_immediate_value_in_rm_register(instruction: InstructionType, memory_mode: MemoryModeEnum) -> bool {
+    return memory_mode != DirectMemoryOperation && instruction == ImmediateToRegisterMOV
+}
+
+fn instruction_has_immediate_value_in_reg_register(instruction: InstructionType) -> bool {
+    return instruction == ImmediateToRegisterMemory || instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB || instruction == ImmediateToAccumulatorCMP
+}
+
+
+fn get_immediate_from_rm_register(instruction: InstructionType, is_word_size: bool, memory_mode: MemoryModeEnum, instruction_pointer: usize, binary_contents: &Vec<u8>) -> usize {
+    if memory_mode != DirectMemoryOperation {
+        // This case is actually the complete opposite from the previous one.
+        // The immediate to register MOV instruction actually does not have the R/M register
+        // but has the REG register it used to move immediate values to.
+        if instruction == ImmediateToRegisterMOV {
+            // and the R/M Register actually is not used at all with the MOV immediate instruction.
+
+            // With the immediate to register mov instruction, the immediate is stored in the second (and third byte if word sized).
+            let second_byte = binary_contents[instruction_pointer + 1];
+            if is_word_size {
+                let third_byte = binary_contents[instruction_pointer + 2];
+                let combined = combine_bytes(third_byte, second_byte);
+                return combined as usize
+            } else {
+                return second_byte as usize
+            }
+        }
+    }
+    panic!("We thought that the rm register contained an immediate when it did not.")
+}
+
+fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType, is_s_bit_set: bool, is_word_size: bool, memory_mode: MemoryModeEnum, instruction_pointer: usize, binary_contents: &Vec<u8>) -> usize {
+    if instruction == ImmediateToRegisterMemory {
+        if !is_word_size {
+            let third_byte = binary_contents[instruction_pointer + 2];
+            return third_byte as usize;
+        } else { // is_word_size
+            // MOV doesn't care about the s_bit. CMP, SUB, ADD do.
+            // if w=1 and s=0 and mnemonic is sub/add/cmp, it's an 16-bit immediate.
+            match (mnemonic, is_s_bit_set) {
+                ("mov", _) | ("cmp", false) | ("add", false) | ("sub", false) => {
+                    if memory_mode == MemoryMode8Bit {
+                        let fourth_byte = binary_contents[instruction_pointer + 3];
+                        let fifth_byte = binary_contents[instruction_pointer + 4];
+                        let combined = combine_bytes(fifth_byte, fourth_byte);
+                        return combined as usize;
+                    } else if memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {
+                        // the immediate is guaranteed to be 16-bit because the s bit is set to 0 in this branch.
+                        let fifth_byte = binary_contents[instruction_pointer + 4];
+                        let sixth_byte = binary_contents[instruction_pointer + 5];
+                        let combined = combine_bytes(sixth_byte, fifth_byte);
+                        return combined as usize;
+                    } else {
+                        let third_byte = binary_contents[instruction_pointer + 2];
+                        let fourth_byte = binary_contents[instruction_pointer + 3];
+                        let combined = combine_bytes(fourth_byte, third_byte);
+                        return combined as usize;
+                    }
+                },
+                ("cmp", true) | ("add", true) | ("sub", true) => {
+                    if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit || memory_mode == DirectMemoryOperation {
+                        // In this branch we guarantee that the s bit is not set. Therefore the immediate can not be a 16-bit value.
+                        // With 16-bit memory mode operations the immediate is in the fifth and sixth bytes depending on the size.
+                        let fifth_byte = binary_contents[instruction_pointer + 4];
+                        return fifth_byte as usize;
+                    } else {
+                        let third_byte = binary_contents[instruction_pointer + 2];
+                        return third_byte as usize;
+                    }
+                }
+                _ => panic!("Unknown (mnemonic, s_bit_is_set): ({})", mnemonic)
+            }
+        }
+    } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB || instruction == ImmediateToAccumulatorCMP {
+        let second_byte = binary_contents[instruction_pointer + 1];
+        if is_word_size {
+            let third_byte = binary_contents[instruction_pointer + 2];
+            let combined = combine_bytes(third_byte, second_byte);
+            return combined as usize;
+        } else {
+            return second_byte as usize;
+        }
+    }
+    panic!("We thought that the reg register contained an immediate when it did not.")
+}
+
 fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, registers: &mut Vec<Register>, mut flag_registers: [FlagRegister; 2], memory: &mut [memory_struct; 64000], instruction_pointer: &mut usize) -> instruction_data {
     let first_byte = binary_contents[*instruction_pointer];
     let second_byte = binary_contents[*instruction_pointer + 1];
@@ -300,126 +386,82 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
     let reg_is_dest = first_byte & D_BITS as u8 != 0;
 
     let mut reg_register = String::new();
-    let mut reg_immediate: i64 = 0;
+    let mut reg_immediate: usize = 0;
     let mut rm_register = String::new();
-    let mut rm_immediate: i64 = 0;
+    let mut rm_immediate: usize = 0;
 
-    // We are doing this if statement because in the case of an ImmediateToRegisterMemory (NON MOV one)
-    // we actually do not have a REG register. the immediate value is always moved into the R/M register.
-    if instruction == ImmediateToRegisterMemory {
-        if !is_word_size {
-            let third_byte = binary_contents[*instruction_pointer + 2];
-            reg_immediate = third_byte as i64
-        } else { // is_word_size
-            // MOV doesn't care about the s_bit. CMP, SUB, ADD do.
-            // if w=1 and s=0 and mnemonic is sub/add/cmp, it's an 16-bit immediate.
-            match (mnemonic, is_s_bit_set) {
-                ("mov", _) | ("cmp", false) | ("add", false) | ("sub", false) => {
-                    if memory_mode == MemoryMode8Bit {
-                        let fourth_byte = binary_contents[*instruction_pointer + 3];
-                        let fifth_byte = binary_contents[*instruction_pointer + 4];
-                        let combined = combine_bytes(fifth_byte, fourth_byte);
-                        reg_immediate = combined as i64
-                    } else if memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {
-                        // the immediate is guaranteed to be 16-bit because the s bit is set to 0 in this branch.
-                        let fifth_byte = binary_contents[*instruction_pointer + 4];
-                        let sixth_byte = binary_contents[*instruction_pointer + 5];
-                        let combined = combine_bytes(sixth_byte, fifth_byte);
-                        reg_immediate = combined as i64
-                    } else {
-                        let third_byte = binary_contents[*instruction_pointer + 2];
-                        let fourth_byte = binary_contents[*instruction_pointer + 3];
-                        let combined = combine_bytes(fourth_byte, third_byte);
-                        reg_immediate = combined as i64
-                    }
-                },
-                ("cmp", true) | ("add", true) | ("sub", true) => {
-                    if memory_mode == MemoryMode16Bit || memory_mode == MemoryMode8Bit || memory_mode == DirectMemoryOperation {
-                        // In this branch we guarantee that the s bit is not set. Therefore the immediate can not be a 16-bit value.
-                        // With 16-bit memory mode operations the immediate is in the fifth and sixth bytes depending on the size.
-                        let fifth_byte = binary_contents[*instruction_pointer + 4];
-                        reg_immediate = fifth_byte as i64;
-                    } else {
-                        let third_byte = binary_contents[*instruction_pointer + 2];
-                        reg_immediate = third_byte as i64
-                    }
-                }
-                _ => panic!("Unknown (mnemonic, s_bit_is_set): ({}, {})", mnemonic, is_s_bit_set)
-            }
-        }
-    } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB || instruction == ImmediateToAccumulatorCMP {
-        if is_word_size {
-            let third_byte = binary_contents[*instruction_pointer + 2];
-            let combined = combine_bytes(third_byte, second_byte);
-            reg_immediate = combined as i64
-        } else {
-            reg_immediate = second_byte as i64
-        }
+    if instruction_has_immediate_value_in_reg_register(instruction) {
+        reg_immediate = get_immediate_from_reg_register(mnemonic, instruction, is_s_bit_set, is_word_size, memory_mode, *instruction_pointer, &binary_contents)
     } else {
-        // In this case its actually not an immediate, instead the string gets populated with the reg register.
         reg_register = get_register(true, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
     }
 
-    if memory_mode != DirectMemoryOperation {
-        // This case is actually the complete opposite from the previous one.
-        // The immediate to register MOV instruction actually does not have the R/M register
-        // but has the REG register it used to move immediate values to.
-        if instruction == ImmediateToRegisterMOV {
-            // and the R/M Register actually is not used at all with the MOV immediate instruction.
-
-            // With the immediate to register mov instruction, the immediate is stored in the second (and third byte if word sized).
-            if is_word_size {
-                let third_byte = binary_contents[*instruction_pointer + 2];
-                let combined = combine_bytes(third_byte, second_byte);
-                rm_immediate = combined as i64
-            } else {
-                rm_immediate = second_byte as i64
-            }
-        } else {
-            // In this case its actually not an immediate, instead the string gets populated with the R/M register.
-            rm_register = get_register(false, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
-        }
+    if instruction_has_immediate_value_in_rm_register(instruction, memory_mode) {
+        rm_immediate = get_immediate_from_rm_register(instruction, is_word_size, memory_mode, *instruction_pointer, &binary_contents)
+    } else {
+        rm_register = get_register(false, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
     }
+
 
     if instruction == ImmediateToRegisterMOV {
         // With the ImmediateToRegisterMOV instruction, get_reg does not matter at all.
         let reg = get_register_state(&reg_register, &registers);
-        update_register_value(reg.register, rm_immediate, registers, instruction, memory_mode, mnemonic);
+        update_register_value(reg.register, rm_immediate as i64, registers, instruction, memory_mode, mnemonic);
     }
     else if instruction_is_immediate_to_register(instruction) && instruction != ImmediateToRegisterMOV {
         if instruction_uses_memory(memory_mode) {
             let disp = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
-            let value = reg_immediate;
             if memory_mode == DirectMemoryOperation {
-                store_memory_value(memory, memory_mode, 0, disp, value, mnemonic, is_word_size);
+                store_memory_value(memory, memory_mode, 0, disp, reg_immediate as i64, mnemonic, is_word_size);
             } else {
                 let rm = get_register_state(&rm_register, registers).updated_value; // rm holds the memory address here.
-                store_memory_value(memory, memory_mode, usize::try_from(rm).unwrap(), disp, value, mnemonic, is_word_size);
+                store_memory_value(memory, memory_mode, usize::try_from(rm).unwrap(), disp, reg_immediate as i64, mnemonic, is_word_size);
             }
         } else if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, registers);
             // in this branch we can just update the value with the immediate.
-            update_register_value(reg.register, rm_immediate, registers, instruction, memory_mode, mnemonic);
+            update_register_value(reg.register, rm_immediate as i64, registers, instruction, memory_mode, mnemonic);
         } else {
             let rm = get_register_state(&rm_register, registers);
             // in this branch we can just update the value with the immediate.
-            update_register_value(rm.register, reg_immediate, registers, instruction, memory_mode, mnemonic);
+            update_register_value(rm.register, reg_immediate as i64, registers, instruction, memory_mode, mnemonic);
         }
     } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
         let memory_address_displacement = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
         if reg_is_dest {
             let reg = get_register_state(&reg_register, registers);
-            let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
-            // TODO: here we don't properly update the register from the memory contents.
-            update_register_value(reg.register, memory_contents.modified_value as i64, registers, instruction, memory_mode, mnemonic);
-        } else {
-            if reg_is_dest {
-                let reg = get_register_state(&reg_register, &registers);
-                // TODO: calculate the address we get from the memorymodenodisplacement registers like bx + ax
+            if rm_register.contains("+") {
+                let mut delimited_registers = rm_register.split("+");
+                let first_register = get_register_state(delimited_registers.next().unwrap().trim(), registers);
+                let second_register = get_register_state(delimited_registers.next().unwrap().trim(), registers);
+                let register_sum = first_register.original_value + second_register.original_value;
+
+                let memory_contents_of_registers_sum = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, usize::try_from(register_sum).unwrap(), 0, is_word_size, false);
+                update_register_value(reg.register, i64::try_from(memory_contents_of_registers_sum.original_value).unwrap(), registers, instruction, memory_mode, mnemonic);
+            } else if rm_register.contains("-") {
+                let mut delimited_registers = rm_register.split("-");
+                let rm_first_register = get_register_state(delimited_registers.next().unwrap().trim(), registers);
+                let rm_second_register = get_register_state(delimited_registers.next().unwrap().trim(), registers);
+                let rm_register_sum = rm_first_register.original_value - rm_second_register.original_value;
+
+                let memory_contents_of_registers_sum = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, usize::try_from(rm_register_sum).unwrap(), 0, is_word_size, false);
+                update_register_value(reg.register, i64::try_from(memory_contents_of_registers_sum.original_value).unwrap(), registers, instruction, memory_mode, mnemonic);
             } else {
-                let rm = get_register_state(&rm_register, registers); // FIXME: this function call fails if the rm register is for example bx + di.
                 let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
-                update_register_value(rm.register, memory_contents.modified_value as i64, registers, instruction, memory_mode, mnemonic);
+                update_register_value(reg.register, memory_contents.original_value as i64, registers, instruction, memory_mode, mnemonic);
+            }
+        } else {
+            if rm_register.contains("+") {
+                let mut delimited_registers = rm_register.split("+");
+                let first_register = get_register_state(delimited_registers.next().unwrap().trim(), registers);
+                let second_register = get_register_state(delimited_registers.next().unwrap().trim(), registers);
+                let register_sum = first_register.original_value + second_register.original_value;
+                store_memory_value(memory, memory_mode, usize::try_from(register_sum).unwrap(), 0, register_sum, mnemonic, is_word_size);
+                let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, register_sum as usize, 0, is_word_size, false);
+
+                // let rm = get_register_state(&rm_register, registers); // FIXME: this function call fails if the rm register is for example bx + di.
+                // let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
+                // update_register_value(rm.register, memory_contents.modified_value as i64, registers, instruction, memory_mode, mnemonic);
             }
         }
     }
@@ -464,7 +506,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         }
     }
 
-    let formatted_instruction = format_instruction(&binary_contents, *instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
+    let formatted_instruction = format_instruction(&binary_contents, *instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate as i64, rm_immediate as i64);
 
     *instruction_pointer += instruction_size;
     let old_instruction_pointer = *instruction_pointer - instruction_size;

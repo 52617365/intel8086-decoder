@@ -1,6 +1,7 @@
 use crate::bits::{InstructionType, MemoryModeEnum};
 use crate::bits::InstructionType::*;
 
+#[derive(Copy, Clone)]
 pub struct Register {
    pub register:       &'static str,
    pub updated_value:  i64,
@@ -20,18 +21,17 @@ pub fn construct_registers() -> Vec<Register>{
     }).collect()
 }
 
-pub fn get_register_state<'a>(register: &String, registers: &'a Vec<Register>) -> &'a Register {
-    assert!(!register.contains("+"), "Multiple registers provided and it's not handled in the calling branch. Registers provided: {]", register);
-    assert!(!register.contains("-"), "Multiple registers provided and it's not handled in the calling branch. Registers provided: {}" ,register);
+
+pub fn get_register_state(register: &str, registers: &Vec<Register>) -> Register {
     for reg in registers.iter() {
         if reg.register == register {
-            return reg
+            return reg.clone()
         }
     }
     panic!("Register not found, this should never happen. Register that was not found was {}", register);
 }
 
-pub fn update_register_value(register_to_update: &'static str, value: i64, registers: &mut Vec<Register>, instruction: InstructionType, memory_mode: MemoryModeEnum, mnemonic: &'static str) -> () {
+pub fn update_register_value(register_to_update: &str, value: i64, registers: &mut Vec<Register>, instruction: InstructionType, memory_mode: MemoryModeEnum, mnemonic: &'static str) -> () {
     for register in registers.iter_mut() {
         if register.register == register_to_update {
             match instruction {
