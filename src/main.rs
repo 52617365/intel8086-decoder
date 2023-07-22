@@ -407,26 +407,20 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         }
     } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
         let memory_address_displacement = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
+        if reg_is_dest {
+            let reg = get_register_state(&reg_register, registers);
+            let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
+            // TODO: here we don't properly update the register from the memory contents.
+            update_register_value(reg.register, memory_contents.modified_value as i64, registers, instruction, memory_mode, mnemonic);
+        } else {
             if reg_is_dest {
-                let reg = get_register_state(&reg_register, registers);
-                let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
-                update_register_value(reg.register, memory_contents.modified_value as i64, registers, instruction, memory_mode, mnemonic);
+                let reg = get_register_state(&reg_register, &registers);
+                // TODO: calculate the address we get from the memorymodenodisplacement registers like bx + ax
             } else {
-                if reg_is_dest {
-                    let reg = get_register_state(&reg_register, &registers);
-                    // TODO: calculate the address we get from the memorymodenodisplacement registers like bx + ax
-                }
-               /*
-                   TODO: when the memory_mode is MemoryModeNoDisplacmement and the destination is a register, we don't properly update the register values.
-
-                   TODO: when memory_mode is MemoryModeNoDisplacement, and the destination is the memory location, we should not call get_register_state with the no displacement values, because it's a memory operation.
-                    Instead we should use or sum up the memory location and add it into memory.
-               */
-                // FIXME: this does not work when its memory mode no displacement and rm_register is bx + di
-                // TODO: handle the case where we have something like bx + di.
-                let rm = get_register_state(&rm_register, registers);
+                let rm = get_register_state(&rm_register, registers); // FIXME: this function call fails if the rm register is for example bx + di.
                 let memory_contents = get_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, 0, memory_address_displacement, is_word_size, false);
                 update_register_value(rm.register, memory_contents.modified_value as i64, registers, instruction, memory_mode, mnemonic);
+            }
         }
     }
 

@@ -21,6 +21,8 @@ pub fn construct_registers() -> Vec<Register>{
 }
 
 pub fn get_register_state<'a>(register: &String, registers: &'a Vec<Register>) -> &'a Register {
+    assert!(!register.contains("+"), "Multiple registers provided and it's not handled in the calling branch. Registers provided: {]", register);
+    assert!(!register.contains("-"), "Multiple registers provided and it's not handled in the calling branch. Registers provided: {}" ,register);
     for reg in registers.iter() {
         if reg.register == register {
             return reg

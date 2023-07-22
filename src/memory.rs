@@ -64,8 +64,8 @@ pub fn get_memory_contents_as_decimal_and_optionally_update_original_value(memor
             let modified_value = memory[address_with_displacement].address_contents.modified_bits as usize;
 
             let decimal_memory_contents = decimal_memory_contents{
-                original_value: original_value as usize,
-                modified_value: modified_value as usize,
+                original_value: original_value,
+                modified_value: modified_value,
             };
 
             if update_original_value { // This is true only when the destination is a memory location.
