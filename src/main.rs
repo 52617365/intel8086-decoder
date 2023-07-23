@@ -326,11 +326,6 @@ fn get_immediate_from_rm_register(instruction: InstructionType, is_word_size: bo
     panic!("We thought that the rm register contained an immediate when it did not.")
 }
 
-// TODO: should this actually return a struct that has a field called is_signed that is bool that
-// checks the first bit to see if the number is actually a signed or unsigned number?
-// This would get rid of all the dumb casting we are currently doing which pollutes the code
-// unnecessarily.
-// NOTE: You get the signed information from the first bit in the instruction.
 fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType, is_s_bit_set: bool, is_word_size: bool, memory_mode: MemoryModeEnum, instruction_pointer: usize, binary_contents: &Vec<u8>) -> Value {
     if instruction == ImmediateToRegisterMemory {
         if !is_word_size {
@@ -842,7 +837,6 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
 
 
 fn combine_register_containing_multiple_registers(registers: &Vec<Register>, rm_register_with_multiple_registers: &String) -> usize {
-    // TODO: this function should use wrapping add and sub.
     let (first_register, second_register) = get_registers_from_multiple_register(registers, rm_register_with_multiple_registers);
     if rm_register_with_multiple_registers.contains("+") {
         let combined_value = first_register.updated_value.value.wrapping_add(second_register.updated_value.value);

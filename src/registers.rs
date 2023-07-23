@@ -83,10 +83,10 @@ pub fn update_register_value(register_to_update: &str, value: ValueEnum, registe
 // TODO: related to the casting problem. Should this also update a struct containing the
 // original_value and also information if the number is signed or not? This would help us get away
 // from the unnecessary casting?
-pub fn update_original_register_value(register_to_update: &'static str, value: usize, registers: &mut Vec<Register>, is_word_size: bool) -> () {
+pub fn update_original_register_value(register_to_update: &'static str, value: ValueEnum, registers: &mut Vec<Register>, is_word_size: bool) -> () {
     for reg in registers.iter_mut() {
         if reg.register == register_to_update {
-            reg.original_value = Value{value, is_signed: number_is_signed(value, is_word_size)};
+            reg.original_value = Value{value, is_signed: number_is_signed(value)};
             return
         }
     }
