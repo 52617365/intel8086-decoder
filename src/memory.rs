@@ -79,6 +79,8 @@ pub fn load_memory_contents_as_decimal_and_optionally_update_original_value(memo
     }
 }
 
+// TODO: instead of passing in is_word_size, we could actually pass in the ValueEnum in the
+// memory_address: usize parameter.
 pub fn store_memory_value(memory: &mut [memory_struct], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, value: i64, mnemonic: &'static str, is_word_size: bool) -> () {
     let mut updated_memory_address = memory_address;
     if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {

@@ -1,22 +1,21 @@
 mod bits;
-mod registers;
-mod flag_registers;
+mod registers; mod flag_registers;
 mod memory;
 
 /*
 TODO: On top of the testing we want to do, we also need to support the old homework because during the newer homework, the old ones broke.
 */
+
 use bits::*;
 
 use crate::memory::{get_displacement, load_memory_contents_as_decimal_and_optionally_update_original_value, memory_contents, memory_struct, store_memory_value, word_sized_value_bytes};
-use crate::bits::combine_bytes;
-use core::panic;
-use std::{env, fs};
+use crate::bits::combine_bytes; use core::panic; use std::{env, fs};
 use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumulatorCMP, ImmediateToRegisterMemory, ImmediateToRegisterMOV, ImmediateToAccumulatorSUB, RegisterMemory, JE_JUMP, JL_JUMP, JLE_JUMP, JB_JUMP, JBE_JUMP, JP_JUMP, JO_JUMP, JS_JUMP, JNE_JUMP, JNL_JUMP, LOOP, LOOPZ, JCXZ, LOOPNZ, JNS, JNO_JUMP, JNBE_JUMP, JNP_JUMP, JNB_JUMP, JNLE_JUMP};
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
+use crate::flag_registers::number_is_signed;
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
-use crate::registers::{construct_registers, get_register_state, Register, register_contains_multiple_registers, update_original_register_value, update_register_value};
+use crate::registers::{Value, ValueEnum, construct_registers, get_register_state, Register, register_contains_multiple_registers, update_original_register_value, update_register_value};
 use crate::flag_registers::{construct_flag_registers, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, twos_complement, FlagRegister};
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
@@ -128,9 +127,7 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
            memory_mode == MemoryMode16Bit
         {
             return match rm_res {
-                // NOTE:
-                // The displacement is added after the registers.
-
+                // We add the displacement after the registers in the end.
                 0b_00_000_000 => "bx + si",
                 0b_00_000_001 => "bx + di",
                 0b_00_000_010 => "bp + si",
@@ -156,6 +153,7 @@ fn get_register(get_reg: bool, inst: InstructionType, memory_mode: MemoryModeEnu
 fn get_mnemonic(first_byte: u8, second_byte: u8, inst: InstructionType) -> &'static str {
     // We need this to determine the mnemonic for immediate to register moves.
     let reg_field = second_byte & Masks::REG_BITS as u8;
+
 
     if inst == JE_JUMP {
         return "je"
@@ -298,7 +296,7 @@ fn instruction_has_immediate_value_in_reg_register(instruction: InstructionType)
 }
 
 
-fn get_immediate_from_rm_register(instruction: InstructionType, is_word_size: bool, memory_mode: MemoryModeEnum, instruction_pointer: usize, binary_contents: &Vec<u8>) -> usize {
+fn get_immediate_from_rm_register(instruction: InstructionType, is_word_size: bool, memory_mode: MemoryModeEnum, instruction_pointer: usize, binary_contents: &Vec<u8>) -> Value {
     if memory_mode != DirectMemoryOperation {
         // This case is actually the complete opposite from the previous one.
         // The immediate to register MOV instruction actually does not have the R/M register
@@ -311,20 +309,37 @@ fn get_immediate_from_rm_register(instruction: InstructionType, is_word_size: bo
             if is_word_size {
                 let third_byte = binary_contents[instruction_pointer + 2];
                 let combined = combine_bytes(third_byte, second_byte);
-                return combined as usize
+                let value = ValueEnum::WordSize(combined as u16);
+                return Value{
+                    value,
+                    is_signed: number_is_signed(value),
+                };
             } else {
-                return second_byte as usize
+                let value = ValueEnum::ByteSize(second_byte as u8);
+                return Value{
+                    value,
+                    is_signed: number_is_signed(value),
+                };
             }
         }
     }
     panic!("We thought that the rm register contained an immediate when it did not.")
 }
 
-fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType, is_s_bit_set: bool, is_word_size: bool, memory_mode: MemoryModeEnum, instruction_pointer: usize, binary_contents: &Vec<u8>) -> usize {
+// TODO: should this actually return a struct that has a field called is_signed that is bool that
+// checks the first bit to see if the number is actually a signed or unsigned number?
+// This would get rid of all the dumb casting we are currently doing which pollutes the code
+// unnecessarily.
+// NOTE: You get the signed information from the first bit in the instruction.
+fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType, is_s_bit_set: bool, is_word_size: bool, memory_mode: MemoryModeEnum, instruction_pointer: usize, binary_contents: &Vec<u8>) -> Value {
     if instruction == ImmediateToRegisterMemory {
         if !is_word_size {
             let third_byte = binary_contents[instruction_pointer + 2];
-            return third_byte as usize;
+            let value = ValueEnum::ByteSize(third_byte as u8);
+            return Value{
+                value,
+                is_signed: number_is_signed(value),
+            };
         } else { // is_word_size
             // MOV doesn't care about the s_bit. CMP, SUB, ADD do.
             // if w=1 and s=0 and mnemonic is sub/add/cmp, it's an 16-bit immediate.
@@ -334,18 +349,31 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
                         let fourth_byte = binary_contents[instruction_pointer + 3];
                         let fifth_byte = binary_contents[instruction_pointer + 4];
                         let combined = combine_bytes(fifth_byte, fourth_byte);
-                        return combined as usize;
+                        let value = ValueEnum::WordSize(combined as u16);
+                        return Value{
+                            value,
+                            is_signed: number_is_signed(value),
+                        };
                     } else if memory_mode == MemoryMode16Bit || memory_mode == DirectMemoryOperation {
                         // the immediate is guaranteed to be 16-bit because the s bit is set to 0 in this branch.
                         let fifth_byte = binary_contents[instruction_pointer + 4];
                         let sixth_byte = binary_contents[instruction_pointer + 5];
                         let combined = combine_bytes(sixth_byte, fifth_byte);
-                        return combined as usize;
+                        let value = ValueEnum::WordSize(combined as u16);
+                        return Value{
+                            value, 
+                            is_signed: number_is_signed(value),
+                        };
                     } else {
                         let third_byte = binary_contents[instruction_pointer + 2];
                         let fourth_byte = binary_contents[instruction_pointer + 3];
                         let combined = combine_bytes(fourth_byte, third_byte);
-                        return combined as usize;
+
+                        let value = ValueEnum::WordSize(combined as u16);
+                        return Value{
+                            value, 
+                            is_signed: number_is_signed(value),
+                        };
                     }
                 },
                 ("cmp", true) | ("add", true) | ("sub", true) => {
@@ -353,10 +381,20 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
                         // In this branch we guarantee that the s bit is not set. Therefore the immediate can not be a 16-bit value.
                         // With 16-bit memory mode operations the immediate is in the fifth and sixth bytes depending on the size.
                         let fifth_byte = binary_contents[instruction_pointer + 4];
-                        return fifth_byte as usize;
+                        let value = ValueEnum::ByteSize(fifth_byte as u8);
+                        return Value{
+                            value,
+                            is_signed: number_is_signed(value),
+                        };
+
                     } else {
                         let third_byte = binary_contents[instruction_pointer + 2];
-                        return third_byte as usize;
+
+                        let value = ValueEnum::ByteSize(third_byte as u8);
+                        return Value{
+                            value, 
+                            is_signed: number_is_signed(value),
+                        };
                     }
                 }
                 _ => panic!("Unknown (mnemonic, s_bit_is_set): ({})", mnemonic)
@@ -367,9 +405,17 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
         if is_word_size {
             let third_byte = binary_contents[instruction_pointer + 2];
             let combined = combine_bytes(third_byte, second_byte);
-            return combined as usize;
+            let value = ValueEnum::WordSize(combined as u16);
+            return Value{
+                value, 
+                is_signed: number_is_signed(value),
+            };
         } else {
-            return second_byte as usize;
+            let value = ValueEnum::ByteSize(second_byte as u8); 
+            return Value{
+                value, 
+                is_signed: number_is_signed(value),
+            };
         }
     }
     panic!("We thought that the reg register contained an immediate when it did not.")
@@ -387,9 +433,9 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
     let reg_is_dest = first_byte & D_BITS as u8 != 0;
 
     let mut reg_register = String::new();
-    let mut reg_immediate: usize = 0;
+    let mut reg_immediate: Value = Value{value: registers::ValueEnum::Uninitialized, is_signed: false};
     let mut rm_register = String::new();
-    let mut rm_immediate: usize = 0;
+    let mut rm_immediate: Value = Value{value: registers::ValueEnum::Uninitialized, is_signed: false};
 
     if instruction_has_immediate_value_in_reg_register(instruction) {
         reg_immediate = get_immediate_from_reg_register(mnemonic, instruction, is_s_bit_set, is_word_size, memory_mode, *instruction_pointer, &binary_contents)
@@ -407,29 +453,29 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
     if instruction == ImmediateToRegisterMOV {
         // With the ImmediateToRegisterMOV instruction, get_reg does not matter at all.
         let reg = get_register_state(&reg_register, &registers);
-        update_register_value(reg.register, rm_immediate as i64, registers, instruction, memory_mode, mnemonic);
+        update_register_value(reg.register, rm_immediate.value, registers, instruction, memory_mode, mnemonic, is_word_size);
     } else if instruction_is_immediate_to_register(instruction) && instruction != ImmediateToRegisterMOV {
         if instruction_uses_memory(memory_mode) {
             let disp = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
             if memory_mode == DirectMemoryOperation {
-                store_memory_value(memory, memory_mode, 0, disp, reg_immediate as i64, mnemonic, is_word_size);
+                store_memory_value(memory, memory_mode, 0, disp, reg_immediate.value as i64, mnemonic, is_word_size);
             } else {
                 if register_contains_multiple_registers(&rm_register) {
                     let (first_register, second_register) = get_registers_from_multiple_register(registers, &rm_register);
-                    // TODO:
+                    // TODO: fill this.
                 } else {
-                    let rm = get_register_state(&rm_register, registers).updated_value; // rm holds the memory address here. //FIXME: this panics when register contains bp + si for example.
-                    store_memory_value(memory, memory_mode, usize::try_from(rm).unwrap(), disp, reg_immediate as i64, mnemonic, is_word_size);
+                    let rm = get_register_state(&rm_register, registers).updated_value;
+                    store_memory_value(memory, memory_mode, rm.value, disp, reg_immediate.value as i64, mnemonic, is_word_size);
                 }
             }
         } else if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
             let reg = get_register_state(&reg_register, registers);
             // in this branch we can just update the value with the immediate.
-            update_register_value(reg.register, rm_immediate as i64, registers, instruction, memory_mode, mnemonic);
+            update_register_value(reg.register, rm_immediate.value, registers, instruction, memory_mode, mnemonic, is_word_size);
         } else {
             let rm = get_register_state(&rm_register, registers);
             // in this branch we can just update the value with the immediate.
-            update_register_value(rm.register, reg_immediate as i64, registers, instruction, memory_mode, mnemonic);
+            update_register_value(rm.register, reg_immediate.value, registers, instruction, memory_mode, mnemonic, is_word_size);
         }
     } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
         let memory_address_displacement = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
@@ -437,17 +483,17 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         if reg_is_dest {
             if register_contains_multiple_registers(&rm_register) {
                 let combined_registers_from_rm = combine_register_containing_multiple_registers(registers, &rm_register);
-                let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, combined_registers_from_rm as usize, memory_address_displacement, is_word_size, false);
-                update_register_value(reg.register, memory_contents.original_value as i64, registers, instruction, memory_mode, mnemonic)
+                let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, combined_registers_from_rm as usize, memory_address_displacement, is_word_size, false); // FIXME: this gets called with a memory address that when converted to usize it larger than the available memory (64k).
+                update_register_value(reg.register, memory_contents.original_value, registers, instruction, memory_mode, mnemonic, is_word_size)
             } else {
                 let rm = get_register_state(&rm_register, registers);
-                let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, rm.updated_value as usize, memory_address_displacement, is_word_size, false); // FIXME: why does this get called with a negative memory address?
-                update_register_value(reg.register, memory_contents.original_value as i64, registers, instruction, memory_mode, mnemonic)
+                let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, rm.updated_value.value as usize, memory_address_displacement, is_word_size, false); // FIXME: why does this get called with a negative memory address? I think we should get rid of the casting all together, this is already mentioned in the FIXME file.
+                update_register_value(reg.register, memory_contents.original_value, registers, instruction, memory_mode, mnemonic, is_word_size)
             }
         } else {
             if register_contains_multiple_registers(&rm_register) {
                 let combined_registers_from_rm = combine_register_containing_multiple_registers(registers, &rm_register);
-                store_memory_value(memory, memory_mode, combined_registers_from_rm as usize, memory_address_displacement, reg.original_value, mnemonic, is_word_size);
+                store_memory_value(memory, memory_mode, combined_registers_from_rm as usize, memory_address_displacement, reg.original_value.value as i64, mnemonic, is_word_size);
             }
         }
     }
@@ -455,7 +501,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
 
     if !instruction_is_conditional_jump(instruction) {
         if mnemonic != "mov" {
-            let mut value: i64 = 0;
+            let mut value: ValueEnum = ValueEnum::Uninitialized;
 
             if instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) {
                 // rm register is always dest.
@@ -463,40 +509,35 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                     value = combine_register_containing_multiple_registers(registers, &rm_register);
                 } else {
                     let rm = get_register_state(&rm_register, registers);
-                    value = rm.updated_value;
+                    value = rm.updated_value.value;
                 }
             } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
                 if memory_mode == DirectMemoryOperation {
                     if reg_is_dest {
                         let reg = get_register_state(&reg_register, registers);
-                        value = reg.updated_value;
+                        value = reg.updated_value.value;
                     } else {
                         let rm = get_register_state(&rm_register, registers);
-                        value = rm.updated_value;
+                        value = rm.updated_value.value;
                     }
                 }
             } else {
                 if reg_is_dest && instruction != ImmediateToRegisterMemory {
                     let reg = get_register_state(&reg_register, registers);
-                    value = reg.updated_value;
+                    value = reg.updated_value.value;
                 } else {
                     let rm = get_register_state(&rm_register, registers);
-                    value = rm.updated_value;
+                    value = rm.updated_value.value;
                 }
             }
-
-            if value >= 0 {
-                set_flags(value, &mut flag_registers, is_word_size);
-            } else {
-                panic!("why are we here?") // NOTE: This avoids +1 instruction, is there a way to do this in a better way?
-            }
+            set_flags(value, &mut flag_registers, is_word_size);
         } else {
             // We don't clear if it's a conditional jump because the jnz conditional jump for example relies on the flags to know when to stop jumping.
             clear_flags_registers(&mut flag_registers);
         }
     }
 
-    let formatted_instruction = format_instruction(&binary_contents, *instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate as i64, rm_immediate as i64);
+    let formatted_instruction = format_instruction(&binary_contents, *instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate.value as i64, rm_immediate.value as i64);
 
     *instruction_pointer += instruction_size;
     let old_instruction_pointer = *instruction_pointer - instruction_size;
@@ -533,7 +574,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             } else {
                 let rm = get_register_state(&rm_register, &registers);
 
-                let decimal_memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, rm.updated_value as usize, disp, is_word_size, true);
+                let decimal_memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, rm.updated_value.value, disp, is_word_size, true);
                 instruction_details = instruction_data{
                     formatted_instruction,
                     original_value: decimal_memory_contents.original_value,
@@ -548,8 +589,8 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         let reg = get_register_state(&reg_register, &registers);
         instruction_details = instruction_data{
             formatted_instruction,
-            original_value: reg.original_value as usize,
-            updated_value: reg.updated_value as usize,
+            original_value: reg.original_value.value,
+            updated_value: reg.updated_value.value,
             flags: get_all_currently_set_flags(flag_registers),
             original_instruction_pointer: old_instruction_pointer,
             updated_instruction_pointer: *instruction_pointer,
@@ -562,8 +603,8 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             let reg = get_register_state(&reg_register, &registers);
             instruction_details = instruction_data{
                 formatted_instruction,
-                original_value: reg.original_value as usize,
-                updated_value: reg.updated_value as usize,
+                original_value: reg.original_value.value,
+                updated_value: reg.updated_value.value,
                 flags: get_all_currently_set_flags(flag_registers),
                 original_instruction_pointer: old_instruction_pointer,
                 updated_instruction_pointer: *instruction_pointer,
@@ -572,8 +613,8 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             let rm = get_register_state(&rm_register, &registers);
             instruction_details = instruction_data{
                 formatted_instruction,
-                original_value: rm.original_value as usize,
-                updated_value: rm.updated_value as usize,
+                original_value: rm.original_value.value,
+                updated_value: rm.updated_value.value,
                 flags: get_all_currently_set_flags(flag_registers),
                 original_instruction_pointer: old_instruction_pointer,
                 updated_instruction_pointer: *instruction_pointer,
@@ -586,8 +627,8 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             // In this branch the value is in the register.
             instruction_details = instruction_data{
                 formatted_instruction,
-                original_value: reg.original_value as usize,
-                updated_value: reg.updated_value as usize,
+                original_value: reg.original_value.value,
+                updated_value: reg.updated_value.value,
                 flags: get_all_currently_set_flags(flag_registers),
                 original_instruction_pointer: old_instruction_pointer,
                 updated_instruction_pointer: *instruction_pointer,
@@ -606,7 +647,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                 }
             } else {
                 let rm = get_register_state(&reg_register, registers);
-                let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, rm.original_value as usize, 0, is_word_size, true);
+                let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, rm.original_value.value, 0, is_word_size, true);
                 instruction_details = instruction_data{
                     formatted_instruction,
                     original_value: memory_contents.original_value,
@@ -622,8 +663,8 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         let rm = get_register_state(&rm_register, &registers);
         instruction_details = instruction_data{
             formatted_instruction,
-            original_value: rm.original_value as usize,
-            updated_value: rm.updated_value as usize,
+            original_value: rm.original_value.value,
+            updated_value: rm.updated_value.value,
             flags: get_all_currently_set_flags(flag_registers),
             original_instruction_pointer: old_instruction_pointer,
             updated_instruction_pointer: *instruction_pointer,
@@ -633,13 +674,13 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
 
     if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
         let reg = get_register_state(&reg_register, &registers);
-        update_original_register_value(reg.register, reg.updated_value, registers);
+        update_original_register_value(reg.register, reg.updated_value.value, registers, is_word_size);
     } else if instruction_uses_memory(memory_mode) {
         // NOTE: We update the original_bits of memory inside the get_memory_contents_as_decimal_and_update_original_value function that
         //  returns a struct of the original and updated_value, should we do the same with registers? It could be easier that way.
     } else {
         let rm = get_register_state(&rm_register, &registers);
-        update_original_register_value(rm.register, rm.updated_value, registers);
+        update_original_register_value(rm.register, rm.updated_value.value, registers, is_word_size);
     }
 
     assert_ne!(instruction_details.formatted_instruction, "", "instruction_details struct is not initialized, this should never happen.");
@@ -800,13 +841,14 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
 }
 
 
-fn combine_register_containing_multiple_registers(registers: &Vec<Register>, rm_register_with_multiple_registers: &String) -> i64 {
+fn combine_register_containing_multiple_registers(registers: &Vec<Register>, rm_register_with_multiple_registers: &String) -> usize {
+    // TODO: this function should use wrapping add and sub.
     let (first_register, second_register) = get_registers_from_multiple_register(registers, rm_register_with_multiple_registers);
     if rm_register_with_multiple_registers.contains("+") {
-        let combined_value = first_register.original_value + second_register.original_value;
+        let combined_value = first_register.updated_value.value.wrapping_add(second_register.updated_value.value);
         return combined_value;
     } else if rm_register_with_multiple_registers.contains("-") {
-        let combined_value = first_register.original_value - second_register.original_value;
+        let combined_value = first_register.updated_value.value.wrapping_sub(second_register.updated_value.value);
         return combined_value;
     } else {
         panic!("Function called with a register that did not contain multiple registers.")
@@ -866,6 +908,7 @@ mod tests {
             let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer);
 
             decoded_instructions.push(decoded_instruction.formatted_instruction);
+        
 
             // println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", decoded_instruction.formatted_instruction, decoded_instruction.original_value, decoded_instruction.updated_value, get_all_currently_set_flags(flag_registers), decoded_instruction.original_instruction_pointer, decoded_instruction.updated_instruction_pointer);
 

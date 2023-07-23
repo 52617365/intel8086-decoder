@@ -1,3 +1,5 @@
+use crate::registers::ValueEnum;
+
 #[derive(Copy, Clone)]
 pub struct FlagRegister {
     pub register: &'static str,
@@ -48,14 +50,20 @@ pub fn set_is_set_for_flag_register(flag: &'static str, flag_registers: &mut [Fl
     panic!("Flag {} not found", flag);
 }
 
-pub fn set_flags(destination_value: i64, flag_registers: &mut [FlagRegister], is_word_size: bool) -> () {
-    if destination_value == 0 {
+pub fn set_flags(destination_value: ValueEnum, flag_registers: &mut [FlagRegister], is_word_size: bool) -> () {
+    let destination_value_integer = match destination_value {
+        ValueEnum::ByteSize(val) => val as usize,
+        ValueEnum::WordSize(val) => val as usize,
+        ValueEnum::Uninitialized => panic!("destination_value should be initialized."),
+    };
+
+    if destination_value_integer == 0 {
         set_is_set_for_flag_register("ZF", flag_registers, true);
     } else {
         set_is_set_for_flag_register("ZF", flag_registers, false);
     }
 
-    if number_is_signed(destination_value, is_word_size) {
+    if number_is_signed(destination_value) {
         set_is_set_for_flag_register("SF", flag_registers, true);
         return
     } else {
@@ -74,18 +82,24 @@ pub fn get_all_currently_set_flags(flag_registers: [FlagRegister; 2]) -> Vec<&'s
     return flags;
 }
 
-fn number_is_signed(value: i64, is_word_size: bool) -> bool {
-    let highest_bit = get_highest_bit(value, is_word_size);
+// TODO: instead of passing in the is_word_size boolean, we can instead pass in a ValueEnum that
+// determines if it's 1 or 2 bytes.
+pub fn number_is_signed(value: ValueEnum) -> bool {
+    let highest_bit = get_highest_bit(value);
     return highest_bit == 1
 }
 
-fn get_highest_bit(value: i64, is_word_size: bool) -> usize {
-    assert!(value >= 0, "get_highest_bit() - Value {} is negative, we thought we didn't have to handle this but now we do.", value);
+fn get_highest_bit(value: ValueEnum) -> usize {
+    if let ValueEnum::Uninitialized = value {
+        panic!("This should not be uninitialized.");
+    }
 
-    if is_word_size {
-        return (value >> 15) as usize;
+    if let ValueEnum::WordSize(val) = value {
+        return (val >> 15) as usize;
+    } else if let ValueEnum::ByteSize(val) = value {
+        return (val >> 7) as usize;
     } else {
-        return (value >> 7) as usize;
+        panic!("Should not get here.")
     }
 }
 
