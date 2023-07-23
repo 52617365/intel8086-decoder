@@ -851,7 +851,6 @@ fn combine_register_containing_multiple_registers(registers: &Vec<Register>, rm_
     if rm_register_with_multiple_registers.contains("+") {
         // We can turn this into an usize here because it won't change the underlying value. Only
         // the destination type matters.
-        let second_register_to_usize = second_register.updated_value.value.get_usize(); 
         let combined_value = first_register.updated_value.wrap_add_and_return_result(second_register.updated_value.value);
         return combined_value;
     } else if rm_register_with_multiple_registers.contains("-") {

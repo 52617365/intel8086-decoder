@@ -20,7 +20,8 @@ impl ValueEnum {
         match self {
             Self::ByteSize(val) => val as usize,
             Self::WordSize(val) => val as usize,
-            Self::Uninitialized => panic!("You're trying to get a usize from a value that is not initialized."),
+            // Self::Uninitialized => panic!("You're trying to get a usize from a value that is not initialized."),
+            Self::Uninitialized => 0,
 
         }
     }
@@ -62,7 +63,7 @@ impl Value {
         }
     }
 
-    pub fn wrap_add_and_return_result(self, value_src: ValueEnum) -> Value {
+    pub fn wrap_add_and_return_result(self) -> Value {
         let self_value_to_usize = self.value.get_usize(); // we can actually do this because the source type does not matter if it
                                              // does not change the underlying value.
         match self.value {
@@ -76,10 +77,10 @@ impl Value {
                 let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
                 return val;
             },
-            ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
+            ValueEnum::Uninitialized => panic!("this should not be uninitialized."), // TODO: should we even panic here? I guess it's just normal behavior, right? or maybe we should panic but we should check for uninitialized in the caller?
         }
     }
-    pub fn wrap_sub_and_return_result(self, value_src: ValueEnum) -> Value {
+    pub fn wrap_sub_and_return_result(self) -> Value {
         let self_value_to_usize = self.value.get_usize(); // we can actually do this because the source type does not matter if it
                                                           //
         match self.value {
@@ -244,10 +245,12 @@ pub fn update_register_value(register_to_update: &str, value: ValueEnum, registe
 }
 
 pub fn update_original_register_value(register_to_update: &'static str, value: ValueEnum, registers: &mut Vec<Register>, is_word_size: bool) -> () {
+    if let ValueEnum::Uninitialized  = value {return}
     for reg in registers.iter_mut() {
         if reg.register == register_to_update {
-            reg.original_value = Value{value, is_signed: number_is_signed(value)};
-            return
-        }
+            reg.original_value = Value { value, is_signed: number_is_signed(value)
+        };
+    }
+    return
     }
 }
