@@ -416,6 +416,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             } else {
                 if register_contains_multiple_registers(&rm_register) {
                     let (first_register, second_register) = get_registers_from_multiple_register(registers, &rm_register);
+                    // TODO:
                 } else {
                     let rm = get_register_state(&rm_register, registers).updated_value; // rm holds the memory address here. //FIXME: this panics when register contains bp + si for example.
                     store_memory_value(memory, memory_mode, usize::try_from(rm).unwrap(), disp, reg_immediate as i64, mnemonic, is_word_size);

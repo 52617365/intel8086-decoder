@@ -1,5 +1,5 @@
 Things to fix in the current decoder.
 
-- get_register_state sometimes gets called when the register passed to it is bx + di. figure out a good way to separate the registers before calling the function. @rase
-- when the instruction is E.g mov al, [bx + si] (happens with other ones too) the registers don't get updated correctly. bx + si should be fetched from memory. @rase
-- fix the annoying casting everywhere, it is useless, use two's complement instead if signed numbers needed.
+- Fix the annoying casting everywhere, it is useless, use two's complement instead if signed numbers needed. (Huge refactor I think)
+- During listing_0041, when the instruction is sub bx, [bp + 0], the result of bx results in -34 which turns into 18446744073709551582 when casted into an usize. This is related to the first fixme, the casts have to go.
+- During listing_0041, when the instruction is add word [bp + si + 1000], 29 | 0 -> 0, the contents should get updated to atleast 0 -> 29 but instead it stays at 0 -> 0 for some reason. This NEEDS to be fixed ASAP.
