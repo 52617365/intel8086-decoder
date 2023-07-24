@@ -17,6 +17,7 @@ use crate::flag_registers::number_is_signed;
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 use crate::registers::{Value, ValueEnum, construct_registers, get_register_state, Register, register_contains_multiple_registers, update_original_register_value, update_register_value};
 use crate::flag_registers::{construct_flag_registers, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, twos_complement, FlagRegister};
+use crate::registers::ValueEnum::Uninitialized;
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
 // This function does not work with the immediate to registers because they use the s bit also, we have to take into consideration
@@ -264,6 +265,7 @@ fn main() {
 
     let mut instruction_pointer: usize = 0;
     while instruction_pointer < binary_contents.len() {
+
         let first_byte = binary_contents[instruction_pointer];
         let second_byte = binary_contents[instruction_pointer + 1];
         let instruction = determine_instruction(&op_codes, first_byte);
@@ -272,7 +274,7 @@ fn main() {
         println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", decoded_instruction.formatted_instruction, decoded_instruction.original_value.get_string_number_from_bits(), decoded_instruction.updated_value.get_string_number_from_bits(), decoded_instruction.flags, decoded_instruction.original_instruction_pointer, decoded_instruction.updated_instruction_pointer);
 
         if instruction_is_conditional_jump(instruction) {
-            perform_conditional_jump(&mut flag_registers, &mut instruction_pointer, second_byte, instruction);
+            perform_conditional_jump(&mut flag_registers, decoded_instruction.original_instruction_pointer, &mut instruction_pointer, second_byte, instruction);
         }
     }
 }
@@ -460,12 +462,17 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                     // TODO: fill this.
                 } else {
                     let rm = get_register_state(&rm_register, registers).updated_value;
-                    let rm_value_casted = match rm.value {
-                        ValueEnum::ByteSize(val) => val as usize,
-                        ValueEnum::WordSize(val) => val as usize,
-                        ValueEnum::Uninitialized => panic!("rm.value should be initialized"),
-                    };
-                    store_memory_value(memory, memory_mode, rm_value_casted, 0, reg_immediate, mnemonic, is_word_size);
+                    if let ValueEnum::Uninitialized = rm.value {
+
+                    }
+                    else {
+                        let rm_value_casted = match rm.value {
+                            ValueEnum::ByteSize(val) => val as usize,
+                            ValueEnum::WordSize(val) => val as usize,
+                            ValueEnum::Uninitialized => panic!("We should not be initialized here because we checked for this before.")
+                        };
+                        store_memory_value(memory, memory_mode, rm_value_casted, 0, reg_immediate, mnemonic, is_word_size);
+                    }
                 }
             }
         } else if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
@@ -604,27 +611,16 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         // we print this out separately because does not modify flags but it relies on them to know when to stop a loop for example so
         // we don't want to clear it but we still want to signal in the print that it does not modify flags.
         let old_instruction_pointer = *instruction_pointer - instruction_size;
-        if reg_is_dest {
-            let reg = get_register_state(&reg_register, &registers);
-            instruction_details = instruction_data{
-                formatted_instruction,
-                original_value: reg.original_value,
-                updated_value: reg.updated_value,
-                flags: get_all_currently_set_flags(flag_registers),
-                original_instruction_pointer: old_instruction_pointer,
-                updated_instruction_pointer: *instruction_pointer,
-            };
-        } else {
-            let rm = get_register_state(&rm_register, &registers);
-            instruction_details = instruction_data{
-                formatted_instruction,
-                original_value: rm.original_value,
-                updated_value: rm.updated_value,
-                flags: get_all_currently_set_flags(flag_registers),
-                original_instruction_pointer: old_instruction_pointer,
-                updated_instruction_pointer: *instruction_pointer,
-            };
-        }
+        // let rm = get_register_state(&rm_register, &registers);
+        // We initialize original_value and updated_value with uninitalized because the conditional jump does not modify the registers (only the IP register but we are handling that here with the instruction_pointer variable getting incremented..)
+        instruction_details = instruction_data{
+            formatted_instruction,
+            original_value: Value{value: Uninitialized, is_signed: false},
+            updated_value: Value{value: Uninitialized, is_signed: false},
+            flags: get_all_currently_set_flags(flag_registers),
+            original_instruction_pointer: old_instruction_pointer,
+            updated_instruction_pointer: *instruction_pointer,
+        };
     }
     else if !instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) && memory_mode == MemoryModeNoDisplacement || memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
         let reg = get_register_state(&reg_register, registers);
@@ -700,7 +696,8 @@ fn get_registers_from_multiple_register(registers: &Vec<Register>, rm_register: 
     (first_register, second_register)
 }
 
-fn perform_conditional_jump(flag_registers: &mut [FlagRegister; 2], instruction_pointer: &mut usize, second_byte: u8, instruction: InstructionType) {
+// TODO: why is perform_conditional_jump making an infinite loop?
+fn perform_conditional_jump(flag_registers: &mut [FlagRegister; 2], old_instruction_pointer: usize, instruction_pointer: &mut usize, second_byte: u8, instruction: InstructionType) {
     let mut jump_happens = false;
 
     match instruction {
@@ -729,10 +726,13 @@ fn perform_conditional_jump(flag_registers: &mut [FlagRegister; 2], instruction_
         _ => (),
     }
     if jump_happens {
-        let offset = twos_complement(second_byte) as usize;
+        // let offset = twos_complement(second_byte) as usize;
         // We might need to add logic in case the jump is forwards but
         // that was not in the assignment so I'm not going to worry about that yet.
-        *instruction_pointer -= offset;
+        // *instruction_pointer -= offset;
+        let instruction_size = *instruction_pointer - old_instruction_pointer;
+        let offset = second_byte as usize + instruction_size;
+        *instruction_pointer  = *instruction_pointer - offset
     }
 }
 
@@ -787,7 +787,7 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
         // this is because we don't want to make a new variable for just one operation. The name is misleading but live with it.
 
         let ax_or_al = get_register(true, instruction, memory_mode, first_byte, second_byte, is_word_size);
-        return format!("{} {}, {}", mnemonic, ax_or_al, reg_immediate.get_string_number_from_bits());
+        return format!("{} {}, {}", mnemonic, ax_or_al, reg_immediate.value.get_usize());
     } else if instruction == RegisterMemory {
         if memory_mode == MemoryModeNoDisplacement {
             if reg_is_dest {

@@ -41,13 +41,14 @@ impl Value {
                 let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
                 *self = val;
             },
-            ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
+            // ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
+            ValueEnum::Uninitialized => (), // NOTE: I think this can be a NOP because it would do nothing anyway if the value we're trying to wrap add with is not initialized.
         }
     }
 
     pub fn wrap_sub(&mut self, value_src: ValueEnum) {
         let value_src_to_usize = value_src.get_usize(); // we can actually do this because the source type does not matter if it
-                                                          //
+                                                              // does not change the underlying value.
         match self.value {
             ValueEnum::ByteSize(val) => {
                 let result_after_wrap = ValueEnum::ByteSize(val.wrapping_sub(u8::try_from(value_src_to_usize).expect("we were sure that the value would fit in u8 but it didn't.")));
@@ -59,7 +60,8 @@ impl Value {
                 let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
                 *self = val;
             },
-            ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
+            // ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
+            ValueEnum::Uninitialized => (), // NOTE: I think this can be a NOP because it would do nothing anyway if the value we're trying to wrap add with is not initialized.
         }
     }
 
@@ -94,7 +96,8 @@ impl Value {
                 let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
                 return val;
             },
-            ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
+            ValueEnum::Uninitialized => self,
+            // ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
         }
     }
 

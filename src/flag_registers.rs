@@ -54,7 +54,8 @@ pub fn set_flags(destination_value: ValueEnum, flag_registers: &mut [FlagRegiste
     let destination_value_integer = match destination_value {
         ValueEnum::ByteSize(val) => val as usize,
         ValueEnum::WordSize(val) => val as usize,
-        ValueEnum::Uninitialized => panic!("destination_value should be initialized."),
+        // ValueEnum::Uninitialized => panic!("destination_value should be initialized."),
+        ValueEnum::Uninitialized => return,
     };
 
     if destination_value_integer == 0 {
