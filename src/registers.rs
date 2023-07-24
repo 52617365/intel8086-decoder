@@ -28,16 +28,16 @@ impl ValueEnum {
 }
 impl Value {
     pub fn wrap_add(&mut self, value_src: ValueEnum) {
-        let self_value_to_usize = self.value.get_usize(); // we can actually do this because the source type does not matter if it
+        let value_src_to_usize = value_src.get_usize();  // we can actually do this because the source type does not matter if it
                                              // does not change the underlying value.
         match self.value {
             ValueEnum::ByteSize(val) => {
-                let result_after_wrap = ValueEnum::ByteSize(val.wrapping_add(u8::try_from(self_value_to_usize).expect("we were sure that the value would fit in u8 but it didn't.")));
+                let result_after_wrap = ValueEnum::ByteSize(val.wrapping_add(u8::try_from(value_src_to_usize).expect("we were sure that the value would fit in u8 but it didn't.")));
                 let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
                 *self = val
             },
             ValueEnum::WordSize(val) => {
-                let result_after_wrap = ValueEnum::WordSize(val.wrapping_add(u16::try_from(self_value_to_usize).expect("we were sure that the value would fit in u16 but it didn't.")));
+                let result_after_wrap = ValueEnum::WordSize(val.wrapping_add(u16::try_from(value_src_to_usize).expect("we were sure that the value would fit in u16 but it didn't.")));
                 let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
                 *self = val;
             },
@@ -46,16 +46,16 @@ impl Value {
     }
 
     pub fn wrap_sub(&mut self, value_src: ValueEnum) {
-        let self_value_to_usize = self.value.get_usize(); // we can actually do this because the source type does not matter if it
+        let value_src_to_usize = value_src.get_usize(); // we can actually do this because the source type does not matter if it
                                                           //
         match self.value {
             ValueEnum::ByteSize(val) => {
-                let result_after_wrap = ValueEnum::ByteSize(val.wrapping_sub(u8::try_from(self_value_to_usize).expect("we were sure that the value would fit in u8 but it didn't.")));
+                let result_after_wrap = ValueEnum::ByteSize(val.wrapping_sub(u8::try_from(value_src_to_usize).expect("we were sure that the value would fit in u8 but it didn't.")));
                 let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
                 *self = val
             },
             ValueEnum::WordSize(val) => {
-                let result_after_wrap = ValueEnum::WordSize(val.wrapping_sub(u16::try_from(self_value_to_usize).expect("we were sure that the value would fit in u16 but it didn't.")));
+                let result_after_wrap = ValueEnum::WordSize(val.wrapping_sub(u16::try_from(value_src_to_usize).expect("we were sure that the value would fit in u16 but it didn't.")));
                 let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
                 *self = val;
             },
@@ -63,8 +63,8 @@ impl Value {
         }
     }
 
-    pub fn wrap_add_and_return_result(self) -> Value {
-        let self_value_to_usize = self.value.get_usize(); // we can actually do this because the source type does not matter if it
+    pub fn wrap_add_and_return_result(self, value_src: ValueEnum) -> Value {
+        let self_value_to_usize = value_src.get_usize(); // we can actually do this because the source type does not matter if it
                                              // does not change the underlying value.
         match self.value {
             ValueEnum::ByteSize(val) => {
@@ -77,11 +77,11 @@ impl Value {
                 let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
                 return val;
             },
-            ValueEnum::Uninitialized => panic!("this should not be uninitialized."), // TODO: should we even panic here? I guess it's just normal behavior, right? or maybe we should panic but we should check for uninitialized in the caller?
+            ValueEnum::Uninitialized => self, // TODO: should we even panic here? I guess it's just normal behavior, right? or maybe we should panic but we should check for uninitialized in the caller?
         }
     }
-    pub fn wrap_sub_and_return_result(self) -> Value {
-        let self_value_to_usize = self.value.get_usize(); // we can actually do this because the source type does not matter if it
+    pub fn wrap_sub_and_return_result(self, value_src: ValueEnum) -> Value {
+        let self_value_to_usize = value_src.get_usize(); // we can actually do this because the source type does not matter if it
                                                           //
         match self.value {
             ValueEnum::ByteSize(val) => {
@@ -98,19 +98,28 @@ impl Value {
         }
     }
 
-    pub fn get_decimal_number_from_bits(self) -> i64 {
+    // TODO: make a function out of this that returns a string and formats the negative - sign
+    // in front of the variable if it's a signed number.
+    // We currently get the signed number correctly but we don't add the - in the front.
+    pub fn get_string_number_from_bits(self) -> String {
         if self.is_signed {
             match self.value {
                 ValueEnum::ByteSize(val) => {
-                    return i64::try_from(self.twos_complement_8_bit(val)).unwrap();
+                    let twos_complement_number = self.twos_complement_8_bit(val);
+                    return format!("{}{}", "-", twos_complement_number.to_string());
+                    // return self.twos_complement_8_bit(val)
+                    // return i64::try_from(self.twos_complement_8_bit(val)).unwrap();
                 },
                 ValueEnum::WordSize(val) => {
-                    return i64::try_from(self.twos_complement_16_bit(val)).unwrap();
+                    let twos_complement_number = self.twos_complement_16_bit(val);
+                    return format!("{}{}", "-", twos_complement_number.to_string());
+                    // return i64::try_from(self.twos_complement_16_bit(val)).unwrap();
                 },
                 ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
             }
         } else {
-            return i64::try_from(self.value.get_usize()).expect("if we cast here we are losing data since usize -> i64 and i64 unsigned bit is half the size.");
+            return self.value.get_usize().to_string();
+            // return i64::try_from(self.value.get_usize()).expect("if we cast here we are losing data since usize -> i64 and i64 unsigned bit is half the size.");
         }
     }
 

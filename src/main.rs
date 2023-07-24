@@ -269,7 +269,7 @@ fn main() {
         let instruction = determine_instruction(&op_codes, first_byte);
         let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer);
 
-        println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", decoded_instruction.formatted_instruction, decoded_instruction.original_value.get_decimal_number_from_bits(), decoded_instruction.updated_value.get_decimal_number_from_bits(), decoded_instruction.flags, decoded_instruction.original_instruction_pointer, decoded_instruction.updated_instruction_pointer);
+        println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", decoded_instruction.formatted_instruction, decoded_instruction.original_value.get_string_number_from_bits(), decoded_instruction.updated_value.get_string_number_from_bits(), decoded_instruction.flags, decoded_instruction.original_instruction_pointer, decoded_instruction.updated_instruction_pointer);
 
         if instruction_is_conditional_jump(instruction) {
             perform_conditional_jump(&mut flag_registers, &mut instruction_pointer, second_byte, instruction);
@@ -740,45 +740,45 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
     if instruction == ImmediateToRegisterMemory {
         if memory_mode == MemoryModeNoDisplacement {
             if is_word_size {
-                return format!("{} word [{}], {}", mnemonic, rm_register, reg_immediate.get_decimal_number_from_bits());
+                return format!("{} word [{}], {}", mnemonic, rm_register, reg_immediate.get_string_number_from_bits());
             } else {
-                return format!("{} byte [{}], {}", mnemonic, rm_register, reg_immediate.get_decimal_number_from_bits());
+                return format!("{} byte [{}], {}", mnemonic, rm_register, reg_immediate.get_string_number_from_bits());
             }
         } else if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
             let displacement = get_displacement(binary_contents, ip, memory_mode);
             // let displacement = get_8_bit_displacement(binary_contents, ip);
             if is_word_size {
-                return format!("{} word [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate.get_decimal_number_from_bits());
+                return format!("{} word [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate.get_string_number_from_bits());
             } else {
-                return format!("{} byte [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate.get_decimal_number_from_bits());
+                return format!("{} byte [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate.get_string_number_from_bits());
             }
         } else if memory_mode == DirectMemoryOperation {
             let displacement = get_displacement(binary_contents, ip, memory_mode);
             if is_word_size {
                 // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
                 if reg_is_dest {
-                    return format!("{} word [{}], {}", mnemonic, displacement, reg_immediate.get_decimal_number_from_bits());
+                    return format!("{} word [{}], {}", mnemonic, displacement, reg_immediate.get_string_number_from_bits());
                 } else {
-                    return format!("{} word {}, [{}]", mnemonic, reg_immediate.get_decimal_number_from_bits(), displacement);
+                    return format!("{} word {}, [{}]", mnemonic, reg_immediate.get_string_number_from_bits(), displacement);
                 }
             } else {
                 // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
                 if reg_is_dest {
                     // NOTE: in this branch the reg_or_immediate and reg_is_dest have no connection to each other. This is an exception with the direct memory mode address.
-                    return format!("{} byte [{}], {}", mnemonic, reg_immediate.get_decimal_number_from_bits(), displacement);
+                    return format!("{} byte [{}], {}", mnemonic, reg_immediate.get_string_number_from_bits(), displacement);
                 } else {
-                    return format!("{} byte {}, [{}]", mnemonic, displacement, reg_immediate.get_decimal_number_from_bits());
+                    return format!("{} byte {}, [{}]", mnemonic, displacement, reg_immediate.get_string_number_from_bits());
                 }
             }
         } else if memory_mode == RegisterMode {
             // NOTE: The reason why the destination is always rm_register is because with the
             // ImmediateToRegisterMemory instruction, the destination is always the rm_register.
-            return format!("{} {}, {}", mnemonic, rm_register, reg_immediate.get_decimal_number_from_bits());
+            return format!("{} {}, {}", mnemonic, rm_register, reg_immediate.get_string_number_from_bits());
         } else {
             panic!("Invalid memory mode {:?}.", memory_mode);
         }
     } else if instruction == ImmediateToRegisterMOV {
-        return format!("{} {}, {}", mnemonic, reg_register, rm_immediate.get_decimal_number_from_bits());
+        return format!("{} {}, {}", mnemonic, reg_register, rm_immediate.get_string_number_from_bits());
     } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorSUB || instruction == ImmediateToAccumulatorCMP {
 
         // NOTE!!!!: with the ImmediateToAccumulator operations, the registers are not specified in the bits,
@@ -787,7 +787,7 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
         // this is because we don't want to make a new variable for just one operation. The name is misleading but live with it.
 
         let ax_or_al = get_register(true, instruction, memory_mode, first_byte, second_byte, is_word_size);
-        return format!("{} {}, {}", mnemonic, ax_or_al, reg_immediate.get_decimal_number_from_bits());
+        return format!("{} {}, {}", mnemonic, ax_or_al, reg_immediate.get_string_number_from_bits());
     } else if instruction == RegisterMemory {
         if memory_mode == MemoryModeNoDisplacement {
             if reg_is_dest {
@@ -895,6 +895,7 @@ mod tests {
         assert_eq!(decoded_instructions.join("\n"), expected_decoded_instructions);
     }
 
+    // TODO: figure out how to properly use two's complement to represent signed values in the format_instruction function.
     #[test]
     fn test_listing_0039() {
         let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0039_more_movs").unwrap();
@@ -922,7 +923,9 @@ mod tests {
                 perform_conditional_jump(&mut flag_registers, &mut instruction_pointer, second_byte, instruction);
             }
         }
-        let expected_decoded_instructions = "mov si, bx\nmov dh, al\nmov cl, 12\nmov ch, 244\nmov cx, 12\nmov cx, 65524\nmov dx, 3948\nmov dx, 61588\nmov al, [bx + si]\nmov bx, [bp + di]\nmov dx, [bp + 0]\nmov ah, [bx + si + 4]\nmov al, [bx + si + 4999]\nmov [bx + di], cx\nmov [bp + si], cl\nmov [bp + 0], ch";
+
+        //mov si, bx\nmov dh, al\nmov cl, 12\nmov ch, -12\nmov cx, 12\nmov cx, -12\nmov dx, 3948\nmov dx, -3948\nmov al, [bx + si]\nmov bx, [bp + di]\nmov dx, [bp]\nmov ah, [bx + si + 4]\nmov al, [bx + si + 4999]\nmov [bx + di], cx\nmov [bp + si], cl\nmov [bp], ch
+        let expected_decoded_instructions = "mov si, bx\nmov dh, al\nmov cl, 12\nmov ch, -12\nmov cx, 12\nmov cx, -12\nmov dx, 3948\nmov dx, -3948\nmov al, [bx + si]\nmov bx, [bp + di]\nmov dx, [bp + 0]\nmov ah, [bx + si + 4]\nmov al, [bx + si + 4999]\nmov [bx + di], cx\nmov [bp + si], cl\nmov [bp + 0], ch";
         assert_eq!(decoded_instructions.join("\n"), expected_decoded_instructions);
     }
 }
