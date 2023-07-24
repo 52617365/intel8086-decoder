@@ -895,7 +895,6 @@ mod tests {
         assert_eq!(decoded_instructions.join("\n"), expected_decoded_instructions);
     }
 
-    // TODO: figure out how to properly use two's complement to represent signed values in the format_instruction function.
     #[test]
     fn test_listing_0039() {
         let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0039_more_movs").unwrap();

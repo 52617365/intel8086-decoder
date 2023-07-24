@@ -77,7 +77,7 @@ impl Value {
                 let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
                 return val;
             },
-            ValueEnum::Uninitialized => self, // TODO: should we even panic here? I guess it's just normal behavior, right? or maybe we should panic but we should check for uninitialized in the caller?
+            ValueEnum::Uninitialized => self,
         }
     }
     pub fn wrap_sub_and_return_result(self, value_src: ValueEnum) -> Value {
@@ -98,9 +98,6 @@ impl Value {
         }
     }
 
-    // TODO: make a function out of this that returns a string and formats the negative - sign
-    // in front of the variable if it's a signed number.
-    // We currently get the signed number correctly but we don't add the - in the front.
     pub fn get_string_number_from_bits(self) -> String {
         if self.is_signed {
             match self.value {
