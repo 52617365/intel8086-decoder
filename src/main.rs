@@ -8,7 +8,7 @@ TODO: On top of the testing we want to do, we also need to support the old homew
 
 use bits::*;
 
-use crate::memory::{get_displacement, load_memory_contents_as_decimal_and_optionally_update_original_value, memory_contents, memory_struct, store_memory_value, word_sized_value_bytes};
+use crate::memory::{get_displacement, load_memory_contents_as_decimal_and_optionally_update_original_value, memory_contents, memory_struct, store_memory_value};
 use crate::bits::combine_bytes; use core::panic; use std::{env, fs};
 use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumulatorCMP, ImmediateToRegisterMemory, ImmediateToRegisterMOV, ImmediateToAccumulatorSUB, RegisterMemory, JE_JUMP, JL_JUMP, JLE_JUMP, JB_JUMP, JBE_JUMP, JP_JUMP, JO_JUMP, JS_JUMP, JNE_JUMP, JNL_JUMP, LOOP, LOOPZ, JCXZ, LOOPNZ, JNS, JNO_JUMP, JNBE_JUMP, JNP_JUMP, JNB_JUMP, JNLE_JUMP};
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
@@ -16,7 +16,7 @@ use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 use crate::flag_registers::number_is_signed;
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 use crate::registers::{Value, ValueEnum, construct_registers, get_register_state, Register, register_contains_multiple_registers, update_original_register_value, update_register_value};
-use crate::flag_registers::{construct_flag_registers, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, twos_complement, FlagRegister};
+use crate::flag_registers::{construct_flag_registers, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, FlagRegister};
 use crate::registers::ValueEnum::Uninitialized;
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
@@ -265,7 +265,6 @@ fn main() {
 
     let mut instruction_pointer: usize = 0;
     while instruction_pointer < binary_contents.len() {
-
         let first_byte = binary_contents[instruction_pointer];
         let second_byte = binary_contents[instruction_pointer + 1];
         let instruction = determine_instruction(&op_codes, first_byte);
@@ -407,6 +406,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
                 value, 
                 is_signed: number_is_signed(value),
             };
+
         } else {
             let value = ValueEnum::ByteSize(second_byte as u8); 
             return Value{
@@ -551,8 +551,10 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
 
     let formatted_instruction = format_instruction(&binary_contents, *instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
 
+    // TODO: I think incrementing the instruction pointer here is causing issues for us with
+    // conditional jumps.
+    let old_instruction_pointer = *instruction_pointer;
     *instruction_pointer += instruction_size;
-    let old_instruction_pointer = *instruction_pointer - instruction_size;
 
 
     let instruction_details: instruction_data;
@@ -677,6 +679,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         let reg = get_register_state(&reg_register, &registers);
         update_original_register_value(reg.register, reg.updated_value.value, registers, is_word_size);
     } else if instruction_uses_memory(memory_mode) {
+        // TODO: fill
         // NOTE: We update the original_bits of memory inside the get_memory_contents_as_decimal_and_update_original_value function that
         //  returns a struct of the original and updated_value, should we do the same with registers? It could be easier that way.
     } else {
@@ -729,10 +732,10 @@ fn perform_conditional_jump(flag_registers: &mut [FlagRegister; 2], old_instruct
         // let offset = twos_complement(second_byte) as usize;
         // We might need to add logic in case the jump is forwards but
         // that was not in the assignment so I'm not going to worry about that yet.
-        // *instruction_pointer -= offset;
-        let instruction_size = *instruction_pointer - old_instruction_pointer;
+        let instruction_ptr_cpy = *instruction_pointer;
+        let instruction_size = instruction_ptr_cpy - old_instruction_pointer;
         let offset = second_byte as usize + instruction_size;
-        *instruction_pointer  = *instruction_pointer - offset
+        *instruction_pointer  -= offset
     }
 }
 

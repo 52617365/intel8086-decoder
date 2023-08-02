@@ -1,5 +1,3 @@
 Things to fix in the current decoder.
 
-- Fix the annoying casting everywhere, it is useless, use two's complement instead if signed numbers needed. (Huge refactor I think)
-- During listing_0041, when the instruction is sub bx, [bp + 0], the result of bx results in -34 which turns into 18446744073709551582 when casted into an usize. This is related to the first fixme, the casts have to go.
-- During listing_0041, when the instruction is add word [bp + si + 1000], 29 | 0 -> 0, the contents should get updated to atleast 0 -> 29 but instead it stays at 0 -> 0 for some reason. This NEEDS to be fixed ASAP.
+- During listing 0041, we run into an infinite loop when dealing with conditional jumps
