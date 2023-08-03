@@ -1,26 +1,41 @@
 use crate::bits::{InstructionType, MemoryModeEnum};
 use crate::bits::InstructionType::*;
-use crate::flag_registers::{number_is_signed, twos_complement};
+use crate::flag_registers::{number_is_signed};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone,Debug)]
 pub enum ValueEnum {
     ByteSize(u8),
     WordSize(u16),
     Uninitialized,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Value {
     pub value: ValueEnum,
     pub is_signed: bool,
 }
 
+impl PartialEq for ValueEnum {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ValueEnum::ByteSize(a), ValueEnum::ByteSize(b)) => a == b,
+            (ValueEnum::WordSize(a), ValueEnum::WordSize(b)) => a == b,
+            (ValueEnum::Uninitialized, ValueEnum::Uninitialized) => true,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value && self.is_signed == other.is_signed
+    }
+}
 impl ValueEnum {
     pub fn get_usize(self) -> usize {
         match self {
             Self::ByteSize(val) => val as usize,
             Self::WordSize(val) => val as usize,
-            // Self::Uninitialized => panic!("You're trying to get a usize from a value that is not initialized."),
             Self::Uninitialized => 0,
 
         }
@@ -167,60 +182,7 @@ pub fn get_register_state(register: &str, registers: &Vec<Register>) -> Register
     panic!("Register not found, this should never happen. Register that was not found was {}", register);
 }
 
-// pub fn wrap_add_to_out_value(value_src: ValueEnum, value_dst: &mut Value) {
-//     let casted_value = match value_src { // Here we cast the value because it does not matter at this
-//                                          // point since the number will stay the same.
-//         ValueEnum::ByteSize(val)  => {
-//             val as usize
-//         },
-//         ValueEnum::WordSize(val) => {
-//             val as usize
-//         },
-//         ValueEnum::Uninitialized => panic!("value should be initialized"),
-//     };
-//
-//     match value_dst.value {
-//         ValueEnum::ByteSize(val) => {
-//             let result_after_wrap = ValueEnum::ByteSize(val.wrapping_add(u8::try_from(casted_value).expect("we were sure that the value would fit in u8 but it didn't.")));
-//             let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
-//             *value_dst = val
-//         },
-//         ValueEnum::WordSize(val) => {
-//             let result_after_wrap = ValueEnum::WordSize(val.wrapping_add(u16::try_from(casted_value).expect("we were sure that the value would fit in u16 but it didn't.")));
-//             let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
-//             *value_dst = val;
-//         },
-//         ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
-//     }
-// }
-
-// pub fn wrap_sub_to_out_value(value_src: ValueEnum, value_dst: &mut Value) {
-//     let casted_value = match value_src { // Here we cast the value because it does not matter at this
-//                                          // point since the number will stay the same.
-//         ValueEnum::ByteSize(val)  => {
-//             val as usize
-//         },
-//         ValueEnum::WordSize(val) => {
-//             val as usize
-//         },
-//         ValueEnum::Uninitialized => panic!("value should be initialized"),
-//     };
-//
-//     match value_dst.value {
-//         ValueEnum::ByteSize(val) => {
-//             let result_after_wrap = ValueEnum::ByteSize(val.wrapping_sub(u8::try_from(casted_value).expect("we were sure that the value would fit in u8 but it didn't.")));
-//             let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
-//             *value_dst = val
-//         },
-//         ValueEnum::WordSize(val) => {
-//             let result_after_wrap = ValueEnum::WordSize(val.wrapping_sub(u16::try_from(casted_value).expect("we were sure that the value would fit in u16 but it didn't.")));
-//             let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
-//             *value_dst = val;
-//         },
-//         ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
-//     }
-// }
-pub fn update_register_value(register_to_update: &str, value: ValueEnum, registers: &mut Vec<Register>, instruction: InstructionType, memory_mode: MemoryModeEnum, mnemonic: &'static str, is_word_size: bool) -> () {
+pub fn update_register_value(register_to_update: &str, value: ValueEnum, registers: &mut Vec<Register>, instruction: InstructionType, memory_mode: MemoryModeEnum, mnemonic: &'static str) -> () {
     for register in registers.iter_mut() {
         if register.register == register_to_update {
             match instruction {

@@ -261,33 +261,41 @@ fn main() {
 
     let mut registers = construct_registers();
     let op_codes = construct_opcodes();
-    let mut flag_registers = construct_flag_registers();
+    let flag_registers = construct_flag_registers();
 
+    let mut old_instruction_pointer: usize = 0;
     let mut instruction_pointer: usize = 0;
+    let simulate_code = false;
     while instruction_pointer < binary_contents.len() {
+        old_instruction_pointer = instruction_pointer;
         let first_byte = binary_contents[instruction_pointer];
-        let second_byte = binary_contents[instruction_pointer + 1];
         let instruction = determine_instruction(&op_codes, first_byte);
-        let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer);
+        let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, simulate_code);
 
-        println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", decoded_instruction.formatted_instruction, decoded_instruction.original_value.get_string_number_from_bits(), decoded_instruction.updated_value.get_string_number_from_bits(), decoded_instruction.flags, decoded_instruction.original_instruction_pointer, decoded_instruction.updated_instruction_pointer);
-
-        if instruction_is_conditional_jump(instruction) {
-            perform_conditional_jump(&mut flag_registers, decoded_instruction.original_instruction_pointer, &mut instruction_pointer, second_byte, instruction);
+        if simulate_code {
+            println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", decoded_instruction.formatted_instruction, decoded_instruction.original_value.get_string_number_from_bits(), decoded_instruction.updated_value.get_string_number_from_bits(), decoded_instruction.flags, old_instruction_pointer, instruction_pointer);
+        } else {
+            println!("{}", decoded_instruction.formatted_instruction);
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct instruction_data {
    formatted_instruction: String,
    original_value: Value,
    updated_value: Value,
    flags: Vec<&'static str>,
-   original_instruction_pointer: usize,
-   updated_instruction_pointer: usize,
 }
 
+impl PartialEq for instruction_data {
+    fn eq(&self, other: &Self) -> bool {
+        self.formatted_instruction == other.formatted_instruction &&
+            self.original_value == other.original_value &&
+            self.updated_value == other.updated_value &&
+            self.flags == other.flags
+    }
+}
 fn instruction_has_immediate_value_in_rm_register(instruction: InstructionType, memory_mode: MemoryModeEnum) -> bool {
     return memory_mode != DirectMemoryOperation && instruction == ImmediateToRegisterMOV
 }
@@ -310,13 +318,13 @@ fn get_immediate_from_rm_register(instruction: InstructionType, is_word_size: bo
             if is_word_size {
                 let third_byte = binary_contents[instruction_pointer + 2];
                 let combined = combine_bytes(third_byte, second_byte);
-                let value = ValueEnum::WordSize(combined as u16);
+                let value = ValueEnum::WordSize(combined);
                 return Value{
                     value,
                     is_signed: number_is_signed(value),
                 };
             } else {
-                let value = ValueEnum::ByteSize(second_byte as u8);
+                let value = ValueEnum::ByteSize(second_byte);
                 return Value{
                     value,
                     is_signed: number_is_signed(value),
@@ -331,7 +339,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
     if instruction == ImmediateToRegisterMemory {
         if !is_word_size {
             let third_byte = binary_contents[instruction_pointer + 2];
-            let value = ValueEnum::ByteSize(third_byte as u8);
+            let value = ValueEnum::ByteSize(third_byte);
             return Value{
                 value,
                 is_signed: number_is_signed(value),
@@ -401,14 +409,14 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
         if is_word_size {
             let third_byte = binary_contents[instruction_pointer + 2];
             let combined = combine_bytes(third_byte, second_byte);
-            let value = ValueEnum::WordSize(combined as u16);
+            let value = ValueEnum::WordSize(combined);
             return Value{
                 value, 
                 is_signed: number_is_signed(value),
             };
 
         } else {
-            let value = ValueEnum::ByteSize(second_byte as u8); 
+            let value = ValueEnum::ByteSize(second_byte);
             return Value{
                 value, 
                 is_signed: number_is_signed(value),
@@ -418,7 +426,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
     panic!("We thought that the reg register contained an immediate when it did not.")
 }
 
-fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, registers: &mut Vec<Register>, mut flag_registers: [FlagRegister; 2], memory: &mut [memory_struct; 64000], instruction_pointer: &mut usize) -> instruction_data {
+fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, registers: &mut Vec<Register>, mut flag_registers: [FlagRegister; 2], memory: &mut [memory_struct; 64000], instruction_pointer: &mut usize, simulate: bool) -> instruction_data {
     let first_byte = binary_contents[*instruction_pointer];
     let second_byte = binary_contents[*instruction_pointer + 1];
 
@@ -430,9 +438,9 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
     let reg_is_dest = first_byte & D_BITS as u8 != 0;
 
     let mut reg_register = String::new();
-    let mut reg_immediate: Value = Value{value: registers::ValueEnum::Uninitialized, is_signed: false};
+    let mut reg_immediate: Value = Value{value: Uninitialized, is_signed: false};
     let mut rm_register = String::new();
-    let mut rm_immediate: Value = Value{value: registers::ValueEnum::Uninitialized, is_signed: false};
+    let mut rm_immediate: Value = Value{value: Uninitialized, is_signed: false};
 
     if instruction_has_immediate_value_in_reg_register(instruction) {
         reg_immediate = get_immediate_from_reg_register(mnemonic, instruction, is_s_bit_set, is_word_size, memory_mode, *instruction_pointer, &binary_contents)
@@ -447,85 +455,92 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
     }
 
 
-    if instruction == ImmediateToRegisterMOV {
-        // With the ImmediateToRegisterMOV instruction, get_reg does not matter at all.
-        let reg = get_register_state(&reg_register, &registers);
-        update_register_value(reg.register, rm_immediate.value, registers, instruction, memory_mode, mnemonic, is_word_size);
-    } else if instruction_is_immediate_to_register(instruction) && instruction != ImmediateToRegisterMOV {
-        if instruction_uses_memory(memory_mode) {
-            let address_from_disp = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
-            if memory_mode == DirectMemoryOperation {
-                store_memory_value(memory, memory_mode, address_from_disp, 0, reg_immediate, mnemonic, is_word_size);
-            } else {
-                if register_contains_multiple_registers(&rm_register) {
-                    let (first_register, second_register) = get_registers_from_multiple_register(registers, &rm_register);
-                    // TODO: fill this.
+    if simulate {
+        if instruction == ImmediateToRegisterMOV {
+            // With the ImmediateToRegisterMOV instruction, get_reg does not matter at all.
+            let reg = get_register_state(&reg_register, &registers);
+            update_register_value(reg.register, rm_immediate.value, registers, instruction, memory_mode, mnemonic);
+        } else if instruction_is_immediate_to_register(instruction) && instruction != ImmediateToRegisterMOV {
+            if instruction_uses_memory(memory_mode) {
+                let address_from_disp = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
+                if memory_mode == DirectMemoryOperation {
+                    store_memory_value(memory, memory_mode, address_from_disp, 0, reg_immediate, mnemonic, is_word_size);
                 } else {
-                    let rm = get_register_state(&rm_register, registers).updated_value;
-                    if let ValueEnum::Uninitialized = rm.value {
-
-                    }
-                    else {
-                        let rm_value_casted = match rm.value {
-                            ValueEnum::ByteSize(val) => val as usize,
-                            ValueEnum::WordSize(val) => val as usize,
-                            ValueEnum::Uninitialized => panic!("We should not be initialized here because we checked for this before.")
-                        };
-                        store_memory_value(memory, memory_mode, rm_value_casted, 0, reg_immediate, mnemonic, is_word_size);
+                    if register_contains_multiple_registers(&rm_register) {
+                        let (first_register, second_register) = get_registers_from_multiple_register(registers, &rm_register);
+                        // TODO: fill this.
+                    } else {
+                        let rm = get_register_state(&rm_register, registers).updated_value;
+                        if let ValueEnum::Uninitialized = rm.value {} else {
+                            let rm_value_casted = match rm.value {
+                                ValueEnum::ByteSize(val) => val as usize,
+                                ValueEnum::WordSize(val) => val as usize,
+                                ValueEnum::Uninitialized => panic!("We should not be initialized here because we checked for this before.")
+                            };
+                            store_memory_value(memory, memory_mode, rm_value_casted, 0, reg_immediate, mnemonic, is_word_size);
+                        }
                     }
                 }
-            }
-        } else if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
-            let reg = get_register_state(&reg_register, registers);
-            // in this branch we can just update the value with the immediate.
-            update_register_value(reg.register, rm_immediate.value, registers, instruction, memory_mode, mnemonic, is_word_size);
-        } else {
-            let rm = get_register_state(&rm_register, registers);
-            // in this branch we can just update the value with the immediate.
-            update_register_value(rm.register, reg_immediate.value, registers, instruction, memory_mode, mnemonic, is_word_size);
-        }
-    } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
-        let memory_address_displacement = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
-        let reg = get_register_state(&reg_register, registers);
-        if reg_is_dest {
-            if register_contains_multiple_registers(&rm_register) {
-                let combined_registers_from_rm = combine_register_containing_multiple_registers(registers, &rm_register);
-                let combined_registers_to_usize = combined_registers_from_rm.value.get_usize();
-                let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, combined_registers_to_usize, memory_address_displacement, is_word_size, false); // FIXME: this gets called with a memory address that when converted to usize it larger than the available memory (64k).
-                update_register_value(reg.register, memory_contents.original_value.value, registers, instruction, memory_mode, mnemonic, is_word_size)
+            } else if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
+                let reg = get_register_state(&reg_register, registers);
+                // in this branch we can just update the value with the immediate.
+                update_register_value(reg.register, rm_immediate.value, registers, instruction, memory_mode, mnemonic);
             } else {
                 let rm = get_register_state(&rm_register, registers);
-                
-
-                let rm_value_to_usize = rm.updated_value.value.get_usize();
-                let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, rm_value_to_usize, memory_address_displacement, is_word_size, false); // FIXME: why does this get called with a negative memory address? I think we should get rid of the casting all together, this is already mentioned in the FIXME file.
-                update_register_value(reg.register, memory_contents.original_value.value, registers, instruction, memory_mode, mnemonic, is_word_size)
+                // in this branch we can just update the value with the immediate.
+                update_register_value(rm.register, reg_immediate.value, registers, instruction, memory_mode, mnemonic);
             }
-        } else {
-            if register_contains_multiple_registers(&rm_register) {
-                let combined_registers_from_rm = combine_register_containing_multiple_registers(registers, &rm_register);
-                let combined_registers_to_usize = combined_registers_from_rm.value.get_usize();
-                store_memory_value(memory, memory_mode, combined_registers_to_usize, memory_address_displacement, reg.original_value, mnemonic, is_word_size);
-            }
-        }
-    }
-
-
-    if !instruction_is_conditional_jump(instruction) {
-        if mnemonic != "mov" {
-            let mut value: ValueEnum = ValueEnum::Uninitialized;
-
-            if instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) {
-                // rm register is always dest.
+        } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
+            let memory_address_displacement = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
+            let reg = get_register_state(&reg_register, registers);
+            if reg_is_dest {
                 if register_contains_multiple_registers(&rm_register) {
-                    value = combine_register_containing_multiple_registers(registers, &rm_register).value;
+                    let combined_registers_from_rm = combine_register_containing_multiple_registers(registers, &rm_register);
+                    let combined_registers_to_usize = combined_registers_from_rm.value.get_usize();
+                    let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, combined_registers_to_usize, memory_address_displacement, is_word_size, false);
+                    update_register_value(reg.register, memory_contents.original_value.value, registers, instruction, memory_mode, mnemonic)
                 } else {
                     let rm = get_register_state(&rm_register, registers);
-                    value = rm.updated_value.value;
+
+
+                    let rm_value_to_usize = rm.updated_value.value.get_usize();
+                    let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, rm_value_to_usize, memory_address_displacement, is_word_size, false);
+                    update_register_value(reg.register, memory_contents.original_value.value, registers, instruction, memory_mode, mnemonic)
                 }
-            } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
-                if memory_mode == DirectMemoryOperation {
-                    if reg_is_dest {
+            } else {
+                if register_contains_multiple_registers(&rm_register) {
+                    let combined_registers_from_rm = combine_register_containing_multiple_registers(registers, &rm_register);
+                    let combined_registers_to_usize = combined_registers_from_rm.value.get_usize();
+                    store_memory_value(memory, memory_mode, combined_registers_to_usize, memory_address_displacement, reg.original_value, mnemonic, is_word_size);
+                }
+            }
+        }
+
+
+        if !instruction_is_conditional_jump(instruction) {
+            if mnemonic != "mov" {
+                let mut value: ValueEnum = ValueEnum::Uninitialized;
+
+                if instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) {
+                    // rm register is always dest.
+                    if register_contains_multiple_registers(&rm_register) {
+                        value = combine_register_containing_multiple_registers(registers, &rm_register).value;
+                    } else {
+                        let rm = get_register_state(&rm_register, registers);
+                        value = rm.updated_value.value;
+                    }
+                } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
+                    if memory_mode == DirectMemoryOperation {
+                        if reg_is_dest {
+                            let reg = get_register_state(&reg_register, registers);
+                            value = reg.updated_value.value;
+                        } else {
+                            let rm = get_register_state(&rm_register, registers);
+                            value = rm.updated_value.value;
+                        }
+                    }
+                } else {
+                    if reg_is_dest && instruction != ImmediateToRegisterMemory {
                         let reg = get_register_state(&reg_register, registers);
                         value = reg.updated_value.value;
                     } else {
@@ -533,34 +548,20 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                         value = rm.updated_value.value;
                     }
                 }
+                set_flags(value, &mut flag_registers, is_word_size);
             } else {
-                if reg_is_dest && instruction != ImmediateToRegisterMemory {
-                    let reg = get_register_state(&reg_register, registers);
-                    value = reg.updated_value.value;
-                } else {
-                    let rm = get_register_state(&rm_register, registers);
-                    value = rm.updated_value.value;
-                }
+                // We don't clear if it's a conditional jump because the jnz conditional jump for example relies on the flags to know when to stop jumping.
+                clear_flags_registers(&mut flag_registers);
             }
-            set_flags(value, &mut flag_registers, is_word_size);
-        } else {
-            // We don't clear if it's a conditional jump because the jnz conditional jump for example relies on the flags to know when to stop jumping.
-            clear_flags_registers(&mut flag_registers);
         }
     }
 
     let formatted_instruction = format_instruction(&binary_contents, *instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
 
-    // TODO: I think incrementing the instruction pointer here is causing issues for us with
-    // conditional jumps.
-    let old_instruction_pointer = *instruction_pointer;
-    *instruction_pointer += instruction_size;
-
-
     let instruction_details: instruction_data;
 
     if instruction == ImmediateToRegisterMemory && instruction_uses_memory(memory_mode) {
-        let disp = get_displacement(&binary_contents, old_instruction_pointer, memory_mode);
+        let disp = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
 
         if memory_mode == DirectMemoryOperation {
             let decimal_memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, 0, disp, is_word_size, true);
@@ -569,8 +570,6 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                 original_value: decimal_memory_contents.original_value,
                 updated_value: decimal_memory_contents.modified_value,
                 flags: get_all_currently_set_flags(flag_registers),
-                original_instruction_pointer: old_instruction_pointer,
-                updated_instruction_pointer: *instruction_pointer,
             }
         } else {
             // rm register contains the dest.
@@ -582,8 +581,6 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                     original_value: decimal_memory_contents.original_value,
                     updated_value: decimal_memory_contents.modified_value,
                     flags: get_all_currently_set_flags(flag_registers),
-                    original_instruction_pointer: old_instruction_pointer,
-                    updated_instruction_pointer: *instruction_pointer,
                 };
             } else {
                 let rm = get_register_state(&rm_register, &registers);
@@ -594,8 +591,6 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                     original_value: decimal_memory_contents.original_value,
                     updated_value: decimal_memory_contents.modified_value,
                     flags: get_all_currently_set_flags(flag_registers),
-                    original_instruction_pointer: old_instruction_pointer,
-                    updated_instruction_pointer: *instruction_pointer,
                 };
             }
         }
@@ -606,13 +601,11 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             original_value: reg.original_value,
             updated_value: reg.updated_value,
             flags: get_all_currently_set_flags(flag_registers),
-            original_instruction_pointer: old_instruction_pointer,
-            updated_instruction_pointer: *instruction_pointer,
         };
     } else if instruction_is_conditional_jump(instruction) {
         // we print this out separately because does not modify flags but it relies on them to know when to stop a loop for example so
         // we don't want to clear it but we still want to signal in the print that it does not modify flags.
-        let old_instruction_pointer = *instruction_pointer - instruction_size;
+
         // let rm = get_register_state(&rm_register, &registers);
         // We initialize original_value and updated_value with uninitalized because the conditional jump does not modify the registers (only the IP register but we are handling that here with the instruction_pointer variable getting incremented..)
         instruction_details = instruction_data{
@@ -620,8 +613,6 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             original_value: Value{value: Uninitialized, is_signed: false},
             updated_value: Value{value: Uninitialized, is_signed: false},
             flags: get_all_currently_set_flags(flag_registers),
-            original_instruction_pointer: old_instruction_pointer,
-            updated_instruction_pointer: *instruction_pointer,
         };
     }
     else if !instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) && memory_mode == MemoryModeNoDisplacement || memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
@@ -633,8 +624,6 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                 original_value: reg.original_value,
                 updated_value: reg.updated_value,
                 flags: get_all_currently_set_flags(flag_registers),
-                original_instruction_pointer: old_instruction_pointer,
-                updated_instruction_pointer: *instruction_pointer,
             }
         } else {
             if register_contains_multiple_registers(&rm_register) {
@@ -645,8 +634,6 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                     original_value: memory_contents.original_value,
                     updated_value: memory_contents.modified_value,
                     flags: get_all_currently_set_flags(flag_registers),
-                    original_instruction_pointer: old_instruction_pointer,
-                    updated_instruction_pointer: *instruction_pointer,
                 }
             } else {
                 let rm = get_register_state(&reg_register, registers);
@@ -656,8 +643,6 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                     original_value: memory_contents.original_value,
                     updated_value: memory_contents.modified_value,
                     flags: get_all_currently_set_flags(flag_registers),
-                    original_instruction_pointer: old_instruction_pointer,
-                    updated_instruction_pointer: *instruction_pointer,
                 }
             }
         }
@@ -669,8 +654,6 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             original_value: rm.original_value,
             updated_value: rm.updated_value,
             flags: get_all_currently_set_flags(flag_registers),
-            original_instruction_pointer: old_instruction_pointer,
-            updated_instruction_pointer: *instruction_pointer,
         }
     }
 
@@ -688,6 +671,13 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
     }
 
     assert_ne!(instruction_details.formatted_instruction, "", "instruction_details struct is not initialized, this should never happen.");
+
+    if instruction_is_conditional_jump(instruction) && simulate {
+        perform_conditional_jump(&mut flag_registers, instruction_size, instruction_pointer, second_byte, instruction);
+    } else {
+        *instruction_pointer += instruction_size;
+    }
+
     return instruction_details;
 }
 
@@ -700,7 +690,7 @@ fn get_registers_from_multiple_register(registers: &Vec<Register>, rm_register: 
 }
 
 // TODO: why is perform_conditional_jump making an infinite loop?
-fn perform_conditional_jump(flag_registers: &mut [FlagRegister; 2], old_instruction_pointer: usize, instruction_pointer: &mut usize, second_byte: u8, instruction: InstructionType) {
+fn perform_conditional_jump(flag_registers: &mut [FlagRegister; 2], instruction_size: usize, instruction_pointer: &mut usize, second_byte: u8, instruction: InstructionType) {
     let mut jump_happens = false;
 
     match instruction {
@@ -732,10 +722,8 @@ fn perform_conditional_jump(flag_registers: &mut [FlagRegister; 2], old_instruct
         // let offset = twos_complement(second_byte) as usize;
         // We might need to add logic in case the jump is forwards but
         // that was not in the assignment so I'm not going to worry about that yet.
-        let instruction_ptr_cpy = *instruction_pointer;
-        let instruction_size = instruction_ptr_cpy - old_instruction_pointer;
-        let offset = second_byte as usize + instruction_size;
-        *instruction_pointer  -= offset
+        let jump = second_byte as usize + instruction_size;
+        *instruction_pointer -= jump
     }
 }
 
@@ -866,6 +854,7 @@ fn combine_register_containing_multiple_registers(registers: &Vec<Register>, rm_
 
 #[cfg(test)]
 mod tests {
+    use crate::memory::word_sized_value_bytes;
     use super::*;
 
     #[test]
@@ -875,24 +864,24 @@ mod tests {
         let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: 0, original_bits: 0 } }; 64000];
 
         let mut registers = construct_registers();
-        let mut flag_registers = construct_flag_registers();
+        let flag_registers = construct_flag_registers();
         let op_codes = construct_opcodes();
         let mut instruction_pointer: usize = 0;
 
         let mut decoded_instructions : Vec<String> = Vec::new();
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
-            let second_byte = binary_contents[instruction_pointer + 1];
+            // let second_byte = binary_contents[instruction_pointer + 1];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, false);
 
             decoded_instructions.push(decoded_instruction.formatted_instruction);
 
             // println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", decoded_instruction.formatted_instruction, decoded_instruction.original_value, decoded_instruction.updated_value, get_all_currently_set_flags(flag_registers), decoded_instruction.original_instruction_pointer, decoded_instruction.updated_instruction_pointer);
 
-            if instruction_is_conditional_jump(instruction) {
-                perform_conditional_jump(&mut flag_registers, &mut instruction_pointer, second_byte, instruction);
-            }
+            // if instruction_is_conditional_jump(instruction) {
+            //     perform_conditional_jump(&mut flag_registers, instruction_size, &mut instruction_pointer, second_byte, instruction);
+            // }
         }
         let expected_decoded_instructions = "mov cx, bx\nmov ch, ah\nmov dx, bx\nmov si, bx\nmov bx, di\nmov al, cl\nmov ch, ch\nmov bx, ax\nmov bx, si\nmov sp, di\nmov bp, ax";
         assert_eq!(decoded_instructions.join("\n"), expected_decoded_instructions);
@@ -901,33 +890,121 @@ mod tests {
     #[test]
     fn test_listing_0039() {
         let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0039_more_movs").unwrap();
-
+        let expected_instructions: Vec<instruction_data> = vec![
+            instruction_data {
+                formatted_instruction: "mov si, bx".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov dh, al".to_string(),
+                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov cl, 12".to_string(),
+                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::ByteSize(12), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov ch, -12".to_string(),
+                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::ByteSize(244), is_signed: true },
+                flags: vec!["SF"],
+            },
+            instruction_data {
+                formatted_instruction: "mov cx, 12".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(12), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov cx, -12".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(12), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(244), is_signed: true },
+                flags: vec!["SF"],
+            },
+            instruction_data {
+                formatted_instruction: "mov dx, 3948".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(3948), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov dx, -3948".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(3948), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(61588), is_signed: true },
+                flags: vec!["SF"],
+            },
+            instruction_data {
+                formatted_instruction: "mov al, [bx + si]".to_string(),
+                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                flags: vec!["ZF"],
+            },
+            instruction_data {
+                formatted_instruction: "mov bx, [bp + di]".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                flags: vec!["ZF"],
+            },
+            instruction_data {
+                formatted_instruction: "mov dx, [bp]".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                flags: vec!["ZF"],
+            },
+            instruction_data {
+                formatted_instruction: "mov ah, [bx + si + 4]".to_string(),
+                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                flags: vec!["ZF"],
+            },
+            instruction_data {
+                formatted_instruction: "mov al, [bx + si + 4999]".to_string(),
+                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                flags: vec!["ZF"],
+            },
+            instruction_data {
+                formatted_instruction: "mov [bx + di], cx".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(244), is_signed: true },
+                flags: vec!["SF"],
+            },
+            instruction_data {
+                formatted_instruction: "mov [bp + si], cl".to_string(),
+                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::ByteSize(12), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov [bp], ch".to_string(),
+                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                updated_value: Value { value: ValueEnum::ByteSize(244), is_signed: true },
+                flags: vec!["SF"],
+            },
+        ];
         let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: 0, original_bits: 0 } }; 64000];
 
         let mut registers = construct_registers();
-        let mut flag_registers = construct_flag_registers();
+        let flag_registers = construct_flag_registers();
         let op_codes = construct_opcodes();
         let mut instruction_pointer: usize = 0;
 
-        let mut decoded_instructions : Vec<String> = Vec::new();
+        let mut decoded_instructions : Vec<instruction_data> = Vec::new();
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
-            let second_byte = binary_contents[instruction_pointer + 1];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer);
-
-            decoded_instructions.push(decoded_instruction.formatted_instruction);
-        
-
-            // println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", decoded_instruction.formatted_instruction, decoded_instruction.original_value, decoded_instruction.updated_value, get_all_currently_set_flags(flag_registers), decoded_instruction.original_instruction_pointer, decoded_instruction.updated_instruction_pointer);
-
-            if instruction_is_conditional_jump(instruction) {
-                perform_conditional_jump(&mut flag_registers, &mut instruction_pointer, second_byte, instruction);
-            }
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, false);
+            decoded_instructions.push(decoded_instruction);
         }
+        assert_eq!(decoded_instructions, expected_instructions);
 
-        //mov si, bx\nmov dh, al\nmov cl, 12\nmov ch, -12\nmov cx, 12\nmov cx, -12\nmov dx, 3948\nmov dx, -3948\nmov al, [bx + si]\nmov bx, [bp + di]\nmov dx, [bp]\nmov ah, [bx + si + 4]\nmov al, [bx + si + 4999]\nmov [bx + di], cx\nmov [bp + si], cl\nmov [bp], ch
-        let expected_decoded_instructions = "mov si, bx\nmov dh, al\nmov cl, 12\nmov ch, -12\nmov cx, 12\nmov cx, -12\nmov dx, 3948\nmov dx, -3948\nmov al, [bx + si]\nmov bx, [bp + di]\nmov dx, [bp + 0]\nmov ah, [bx + si + 4]\nmov al, [bx + si + 4999]\nmov [bx + di], cx\nmov [bp + si], cl\nmov [bp + 0], ch";
-        assert_eq!(decoded_instructions.join("\n"), expected_decoded_instructions);
+        // let expected_decoded_instructions = "mov si, bx\nmov dh, al\nmov cl, 12\nmov ch, -12\nmov cx, 12\nmov cx, -12\nmov dx, 3948\nmov dx, -3948\nmov al, [bx + si]\nmov bx, [bp + di]\nmov dx, [bp + 0]\nmov ah, [bx + si + 4]\nmov al, [bx + si + 4999]\nmov [bx + di], cx\nmov [bp + si], cl\nmov [bp + 0], ch";
+        // assert_eq!(decoded_instructions.join("\n"), expected_decoded_instructions);
     }
 }
