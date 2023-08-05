@@ -122,19 +122,15 @@ impl Value {
                 ValueEnum::ByteSize(val) => {
                     let twos_complement_number = self.twos_complement_8_bit(val);
                     return format!("{}{}", "-", twos_complement_number.to_string());
-                    // return self.twos_complement_8_bit(val)
-                    // return i64::try_from(self.twos_complement_8_bit(val)).unwrap();
                 },
                 ValueEnum::WordSize(val) => {
                     let twos_complement_number = self.twos_complement_16_bit(val);
                     return format!("{}{}", "-", twos_complement_number.to_string());
-                    // return i64::try_from(self.twos_complement_16_bit(val)).unwrap();
                 },
                 ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
             }
         } else {
             return self.value.get_usize().to_string();
-            // return i64::try_from(self.value.get_usize()).expect("if we cast here we are losing data since usize -> i64 and i64 unsigned bit is half the size.");
         }
     }
 
@@ -215,13 +211,11 @@ pub fn update_register_value(register_to_update: &str, value: ValueEnum, registe
     panic!("Register not found, this should never happen. Register that was not found was {}", register_to_update);
 }
 
-pub fn update_original_register_value(register_to_update: &'static str, value: ValueEnum, registers: &mut Vec<Register>, is_word_size: bool) -> () {
-    if let ValueEnum::Uninitialized  = value {return}
+pub fn update_original_register_value(register_to_update: &'static str, value: ValueEnum, registers: &mut Vec<Register>) -> () {
+    if let ValueEnum::Uninitialized = value {return}
     for reg in registers.iter_mut() {
         if reg.register == register_to_update {
-            reg.original_value = Value { value, is_signed: number_is_signed(value)
-        };
-    }
-    return
+            reg.original_value = Value { value, is_signed: number_is_signed(value) };
+        }
     }
 }

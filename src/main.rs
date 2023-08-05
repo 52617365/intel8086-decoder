@@ -17,11 +17,10 @@ use crate::flag_registers::number_is_signed;
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 use crate::registers::{Value, ValueEnum, construct_registers, get_register_state, Register, register_contains_multiple_registers, update_original_register_value, update_register_value};
 use crate::flag_registers::{construct_flag_registers, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, FlagRegister};
-use crate::registers::ValueEnum::Uninitialized;
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
 // This function does not work with the immediate to registers because they use the s bit also, we have to take into consideration
-// that bit separately.
+// that bit separatelyemoveOccurrence
 fn is_word_size(first_byte: u8, inst_type: InstructionType) -> bool {
     return if inst_type == ImmediateToRegisterMOV {
         first_byte & IMMEDIATE_TO_REG_MOV_W_BIT as u8 != 0
@@ -265,7 +264,7 @@ fn main() {
 
     let mut old_instruction_pointer: usize = 0;
     let mut instruction_pointer: usize = 0;
-    let simulate_code = false;
+    let simulate_code = true;
     while instruction_pointer < binary_contents.len() {
         old_instruction_pointer = instruction_pointer;
         let first_byte = binary_contents[instruction_pointer];
@@ -438,9 +437,9 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
     let reg_is_dest = first_byte & D_BITS as u8 != 0;
 
     let mut reg_register = String::new();
-    let mut reg_immediate: Value = Value{value: Uninitialized, is_signed: false};
+    let mut reg_immediate: Value = Value{value: ValueEnum::Uninitialized, is_signed: false};
     let mut rm_register = String::new();
-    let mut rm_immediate: Value = Value{value: Uninitialized, is_signed: false};
+    let mut rm_immediate: Value = Value{value: ValueEnum::Uninitialized, is_signed: false};
 
     if instruction_has_immediate_value_in_reg_register(instruction) {
         reg_immediate = get_immediate_from_reg_register(mnemonic, instruction, is_s_bit_set, is_word_size, memory_mode, *instruction_pointer, &binary_contents)
@@ -548,7 +547,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                         value = rm.updated_value.value;
                     }
                 }
-                set_flags(value, &mut flag_registers, is_word_size);
+                set_flags(value, &mut flag_registers);
             } else {
                 // We don't clear if it's a conditional jump because the jnz conditional jump for example relies on the flags to know when to stop jumping.
                 clear_flags_registers(&mut flag_registers);
@@ -557,6 +556,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
     }
 
     let formatted_instruction = format_instruction(&binary_contents, *instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
+
 
     let instruction_details: instruction_data;
 
@@ -610,8 +610,8 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         // We initialize original_value and updated_value with uninitalized because the conditional jump does not modify the registers (only the IP register but we are handling that here with the instruction_pointer variable getting incremented..)
         instruction_details = instruction_data{
             formatted_instruction,
-            original_value: Value{value: Uninitialized, is_signed: false},
-            updated_value: Value{value: Uninitialized, is_signed: false},
+            original_value: Value{value:ValueEnum::Uninitialized, is_signed: false},
+            updated_value: Value{value:ValueEnum::Uninitialized, is_signed: false},
             flags: get_all_currently_set_flags(flag_registers),
         };
     }
@@ -660,14 +660,14 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
 
     if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
         let reg = get_register_state(&reg_register, &registers);
-        update_original_register_value(reg.register, reg.updated_value.value, registers, is_word_size);
+        update_original_register_value(reg.register, reg.updated_value.value, registers);
     } else if instruction_uses_memory(memory_mode) {
         // TODO: fill
         // NOTE: We update the original_bits of memory inside the get_memory_contents_as_decimal_and_update_original_value function that
         //  returns a struct of the original and updated_value, should we do the same with registers? It could be easier that way.
     } else {
         let rm = get_register_state(&rm_register, &registers);
-        update_original_register_value(rm.register, rm.updated_value.value, registers, is_word_size);
+        update_original_register_value(rm.register, rm.updated_value.value, registers);
     }
 
     assert_ne!(instruction_details.formatted_instruction, "", "instruction_details struct is not initialized, this should never happen.");
@@ -893,43 +893,43 @@ mod tests {
         let expected_instructions: Vec<instruction_data> = vec![
             instruction_data {
                 formatted_instruction: "mov si, bx".to_string(),
-                original_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
-                updated_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov dh, al".to_string(),
-                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
-                updated_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov cl, 12".to_string(),
-                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::ByteSize(12), is_signed: false },
                 flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov ch, -12".to_string(),
-                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::ByteSize(244), is_signed: true },
-                flags: vec!["SF"],
+                flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov cx, 12".to_string(),
-                original_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::WordSize(12), is_signed: false },
                 flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov cx, -12".to_string(),
                 original_value: Value { value: ValueEnum::WordSize(12), is_signed: false },
-                updated_value: Value { value: ValueEnum::WordSize(244), is_signed: true },
-                flags: vec!["SF"],
+                updated_value: Value { value: ValueEnum::WordSize(65524), is_signed: true },
+                flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov dx, 3948".to_string(),
-                original_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::WordSize(3948), is_signed: false },
                 flags: vec![],
             },
@@ -937,55 +937,55 @@ mod tests {
                 formatted_instruction: "mov dx, -3948".to_string(),
                 original_value: Value { value: ValueEnum::WordSize(3948), is_signed: false },
                 updated_value: Value { value: ValueEnum::WordSize(61588), is_signed: true },
-                flags: vec!["SF"],
+                flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov al, [bx + si]".to_string(),
-                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
-                updated_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
-                flags: vec!["ZF"],
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov bx, [bp + di]".to_string(),
-                original_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
-                updated_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
-                flags: vec!["ZF"],
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov dx, [bp]".to_string(),
-                original_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
-                updated_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
-                flags: vec!["ZF"],
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov ah, [bx + si + 4]".to_string(),
-                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
-                updated_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
-                flags: vec!["ZF"],
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov al, [bx + si + 4999]".to_string(),
-                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
-                updated_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
-                flags: vec!["ZF"],
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov [bx + di], cx".to_string(),
-                original_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::WordSize(244), is_signed: true },
-                flags: vec!["SF"],
+                flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov [bp + si], cl".to_string(),
-                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::ByteSize(12), is_signed: false },
                 flags: vec![],
             },
             instruction_data {
                 formatted_instruction: "mov [bp], ch".to_string(),
-                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: false },
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::ByteSize(244), is_signed: true },
-                flags: vec!["SF"],
+                flags: vec![],
             },
         ];
         let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: 0, original_bits: 0 } }; 64000];
@@ -999,7 +999,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, false);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, true);
             decoded_instructions.push(decoded_instruction);
         }
         assert_eq!(decoded_instructions, expected_instructions);

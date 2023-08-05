@@ -50,11 +50,10 @@ pub fn set_is_set_for_flag_register(flag: &'static str, flag_registers: &mut [Fl
     panic!("Flag {} not found", flag);
 }
 
-pub fn set_flags(destination_value: ValueEnum, flag_registers: &mut [FlagRegister], is_word_size: bool) -> () {
+pub fn set_flags(destination_value: ValueEnum, flag_registers: &mut [FlagRegister]) -> () {
     let destination_value_integer = match destination_value {
         ValueEnum::ByteSize(val) => val as usize,
         ValueEnum::WordSize(val) => val as usize,
-        // ValueEnum::Uninitialized => panic!("destination_value should be initialized."),
         ValueEnum::Uninitialized => return,
     };
 
