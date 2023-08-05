@@ -1,10 +1,11 @@
-use crate::bits::{MemoryModeEnum, combine_bytes};
+use crate::bits::{MemoryModeEnum, combine_bytes, instruction_uses_memory};
 use crate::registers::{ValueEnum, Value};
 use crate::flag_registers::number_is_signed;
 
 
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement};
+use crate::registers::ValueEnum::Uninitialized;
 
 // The memory struct is used by the main loop to simulate memory.
 // It's simulated by holding a large array of memory structs.
@@ -14,6 +15,12 @@ pub struct memory_struct {
     pub address_contents: memory_contents
 }
 
+#[derive(Copy, Clone)]
+pub struct bits_struct {
+    pub bits: u8,
+    pub initialized: bool,
+}
+
 // The memory_contents struct holds both the original_bits and modified_bits because
 // at the end of the main loop we want to signal to the user how the memory contents
 // was modified during the instruction by converting 1 or 2 bytes depending on the
@@ -21,8 +28,8 @@ pub struct memory_struct {
 // To the user the output will then look like: mov [1000], 30 | [1000] 0 -> 30
 #[derive(Copy, Clone)]
 pub struct memory_contents {
-   pub original_bits: u8,
-   pub modified_bits: u8,
+   pub original_bits: bits_struct,
+   pub modified_bits: bits_struct,
 }
 
 
@@ -43,37 +50,101 @@ fn adjust_memory_address(memory_mode: MemoryModeEnum, memory_address: usize, dis
     }
 }
 
+fn original_8_bit_memory_location_is_initialized(first_byte: memory_struct) -> bool {
+    return first_byte.address_contents.original_bits.initialized;
+}
+fn modified_8_bit_memory_location_is_initialized(first_byte: memory_struct) -> bool {
+    return first_byte.address_contents.modified_bits.initialized;
+}
+
+fn original_16_bit_memory_location_is_initialized(first_byte: memory_struct, second_byte: memory_struct) -> bool {
+    return second_byte.address_contents.original_bits.initialized && first_byte.address_contents.original_bits.initialized;
+}
+fn modified_16_bit_memory_location_is_initialized(first_byte: memory_struct, second_byte: memory_struct) -> bool {
+    return second_byte.address_contents.modified_bits.initialized && first_byte.address_contents.modified_bits.initialized;
+}
+
 pub fn load_memory_contents_as_decimal_and_optionally_update_original_value(memory: &mut [memory_struct], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, is_word_size: bool, update_original_value: bool) -> decimal_memory_contents {
     assert!(memory_address < memory.len(), "Address was larger than than the available memory.");
 
     let m_memory_address = adjust_memory_address(memory_mode, memory_address, displacement);
 
-    if memory_mode == DirectMemoryOperation || memory_mode == MemoryModeNoDisplacement || memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
+    if instruction_uses_memory(memory_mode) {
         if is_word_size {
             let first_byte = memory[m_memory_address];
             let second_byte = memory[m_memory_address + 1];
-            let original_value_combined = combine_bytes(second_byte.address_contents.original_bits, first_byte.address_contents.original_bits);
-            let modified_value_combined = combine_bytes(second_byte.address_contents.modified_bits, first_byte.address_contents.modified_bits);
 
-            let original_value = ValueEnum::WordSize(original_value_combined as u16);
-            let modified_value = ValueEnum::WordSize(modified_value_combined as u16);
+            if !original_16_bit_memory_location_is_initialized(first_byte, second_byte) && !modified_16_bit_memory_location_is_initialized(first_byte, second_byte) {
+                return decimal_memory_contents{
+                    original_value: Value{value: ValueEnum::Uninitialized, is_signed: false},
+                    modified_value: Value{value: ValueEnum::Uninitialized, is_signed: false}
+                };
+            }
+            if !original_16_bit_memory_location_is_initialized(first_byte, second_byte) && modified_16_bit_memory_location_is_initialized(first_byte, second_byte) {
+                // original value wasnt touched and the updated was.
 
-            let decimal_memory_contents =  decimal_memory_contents{
+                let modified_value_combined = combine_bytes(second_byte.address_contents.modified_bits.bits, first_byte.address_contents.modified_bits.bits);
+                let modified_value = ValueEnum::WordSize(modified_value_combined);
+
+                let decimal_memory_contents = decimal_memory_contents{
+                    original_value: Value{value: ValueEnum::Uninitialized, is_signed: false},
+                    modified_value: Value{value: modified_value, is_signed: number_is_signed(modified_value)}
+                };
+                if update_original_value { // This is true only when the destination is a memory location.
+                    memory[m_memory_address].address_contents.original_bits = memory[m_memory_address].address_contents.modified_bits;
+                    memory[m_memory_address + 1].address_contents.original_bits = memory[m_memory_address + 1].address_contents.modified_bits;
+                }
+
+                return decimal_memory_contents;
+            }
+
+            assert!(original_16_bit_memory_location_is_initialized(first_byte, second_byte) && modified_16_bit_memory_location_is_initialized(first_byte, second_byte), "why did we get here?");
+
+            let original_value_combined = combine_bytes(second_byte.address_contents.original_bits.bits, first_byte.address_contents.original_bits.bits);
+            let modified_value_combined = combine_bytes(second_byte.address_contents.modified_bits.bits, first_byte.address_contents.modified_bits.bits);
+
+            let original_value = ValueEnum::WordSize(original_value_combined);
+            let modified_value = ValueEnum::WordSize(modified_value_combined);
+
+            let decimal_memory_contents = decimal_memory_contents{
                 original_value: Value{value: original_value, is_signed: number_is_signed(original_value)},
                 modified_value: Value{value: modified_value, is_signed: number_is_signed(modified_value)}           
             };
+
             if update_original_value { // This is true only when the destination is a memory location.
                 memory[m_memory_address].address_contents.original_bits = memory[m_memory_address].address_contents.modified_bits;
                 memory[m_memory_address + 1].address_contents.original_bits = memory[m_memory_address + 1].address_contents.modified_bits;
             }
+
             return decimal_memory_contents;
         } else {
-            let address_with_displacement = m_memory_address + displacement;
-            let original_value = memory[address_with_displacement].address_contents.original_bits as usize;
-            let modified_value = memory[address_with_displacement].address_contents.modified_bits as usize;
+            let memory_location = memory[m_memory_address];
 
-            let original_value = ValueEnum::ByteSize(original_value as u8);
-            let modified_value = ValueEnum::ByteSize(modified_value as u8);
+            if !original_8_bit_memory_location_is_initialized(memory_location) && !modified_8_bit_memory_location_is_initialized(memory_location) {
+                return decimal_memory_contents{
+                    original_value: Value{value: Uninitialized, is_signed: false},
+                    modified_value: Value{value: Uninitialized, is_signed: false}
+                };
+            }
+            if !original_8_bit_memory_location_is_initialized(memory_location) && modified_8_bit_memory_location_is_initialized(memory_location) {
+
+                let modified_value = ValueEnum::ByteSize(memory_location.address_contents.modified_bits.bits);
+
+                let decimal_memory_contents = decimal_memory_contents{
+                    original_value: Value{value: Uninitialized, is_signed: false},
+                    modified_value: Value{value: modified_value, is_signed: number_is_signed(modified_value)}
+                };
+
+                if update_original_value { // This is true only when the destination is a memory location.
+                    memory[m_memory_address].address_contents.original_bits = memory[m_memory_address].address_contents.modified_bits;
+                }
+
+                return decimal_memory_contents;
+            }
+            assert!(original_8_bit_memory_location_is_initialized(memory_location) && modified_8_bit_memory_location_is_initialized(memory_location), "why did we get here?");
+
+            let original_value = ValueEnum::ByteSize(memory_location.address_contents.original_bits.bits);
+            let modified_value = ValueEnum::ByteSize(memory_location.address_contents.modified_bits.bits);
 
             let decimal_memory_contents = decimal_memory_contents{
                 original_value: Value{value: original_value, is_signed: number_is_signed(original_value)},
@@ -103,11 +174,11 @@ pub fn store_memory_value(memory: &mut [memory_struct], memory_mode: MemoryModeE
         let memory_contents: Value;
 
         if is_word_size {
-            let combined = combine_bytes(memory[memory_address + 1].address_contents.original_bits, memory[memory_address].address_contents.original_bits);
+            let combined = combine_bytes(memory[memory_address + 1].address_contents.original_bits.bits, memory[memory_address].address_contents.original_bits.bits);
             let val = ValueEnum::WordSize(combined);
             memory_contents = Value{value: val, is_signed: number_is_signed(val)};
         } else {
-            let val = ValueEnum::ByteSize(memory[memory_address].address_contents.original_bits);
+            let val = ValueEnum::ByteSize(memory[memory_address].address_contents.original_bits.bits);
             memory_contents = Value{value: val, is_signed: number_is_signed(val)};
         }
 
@@ -123,11 +194,15 @@ pub fn store_memory_value(memory: &mut [memory_struct], memory_mode: MemoryModeE
         if mnemonic != "cmp" {
             let memory_contents = separate_word_sized_value_into_bytes(usize::try_from(val).unwrap());
 
-            memory[updated_memory_address].address_contents.modified_bits = memory_contents.lower_byte;
-            memory[updated_memory_address + 1].address_contents.modified_bits = memory_contents.upper_byte;
+            memory[updated_memory_address].address_contents.modified_bits.bits = memory_contents.lower_byte;
+            memory[updated_memory_address].address_contents.modified_bits.initialized = true;
+
+            memory[updated_memory_address + 1].address_contents.modified_bits.bits = memory_contents.upper_byte;
+            memory[updated_memory_address + 1].address_contents.modified_bits.initialized = true;
         }
     } else if let ValueEnum::ByteSize(val) = updated_value.value {
-        memory[updated_memory_address].address_contents.modified_bits = val as u8;
+        memory[updated_memory_address].address_contents.modified_bits.bits = val;
+        memory[updated_memory_address].address_contents.modified_bits.initialized = true;
     } else {
         panic!("we should not get here ever");
     }
