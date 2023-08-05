@@ -91,6 +91,7 @@ pub fn load_memory_contents_as_decimal_and_optionally_update_original_value(memo
     }
 }
 
+// TODO: get rid of memory_mode in parameters because it's useless.
 pub fn store_memory_value(memory: &mut [memory_struct], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, value: Value, mnemonic: &'static str, is_word_size: bool) -> () {
     let mut updated_memory_address = memory_address;
     updated_memory_address += displacement;
@@ -115,21 +116,20 @@ pub fn store_memory_value(memory: &mut [memory_struct], memory_mode: MemoryModeE
         } else {
             updated_value = memory_contents.wrap_sub_and_return_result(value.value);
         }
+    } else {
+        panic!("store_memory_value called with cmp even though cmp does not change state.")
+    }
+    if let ValueEnum::WordSize(val) = updated_value.value {
+        if mnemonic != "cmp" {
+            let memory_contents = separate_word_sized_value_into_bytes(usize::try_from(val).unwrap());
 
-
-
-        if let ValueEnum::WordSize(val) = updated_value.value {
-            if mnemonic != "cmp" {
-                let memory_contents = separate_word_sized_value_into_bytes(usize::try_from(val).unwrap());
-
-                memory[updated_memory_address].address_contents.modified_bits = memory_contents.lower_byte;
-                memory[updated_memory_address + 1].address_contents.modified_bits = memory_contents.upper_byte;
-            }
-        } else if let ValueEnum::ByteSize(val) = updated_value.value {
-            memory[updated_memory_address].address_contents.modified_bits = val as u8;
-        } else {
-            panic!("we should not get here ever");
+            memory[updated_memory_address].address_contents.modified_bits = memory_contents.lower_byte;
+            memory[updated_memory_address + 1].address_contents.modified_bits = memory_contents.upper_byte;
         }
+    } else if let ValueEnum::ByteSize(val) = updated_value.value {
+        memory[updated_memory_address].address_contents.modified_bits = val as u8;
+    } else {
+        panic!("we should not get here ever");
     }
 }
 

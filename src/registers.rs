@@ -1,6 +1,7 @@
 use crate::bits::{InstructionType, MemoryModeEnum};
 use crate::bits::InstructionType::*;
 use crate::flag_registers::{number_is_signed};
+use crate::is_word_size;
 
 #[derive(Copy, Clone,Debug)]
 pub enum ValueEnum {
@@ -178,7 +179,7 @@ pub fn get_register_state(register: &str, registers: &Vec<Register>) -> Register
     panic!("Register not found, this should never happen. Register that was not found was {}", register);
 }
 
-pub fn update_register_value(register_to_update: &str, value: ValueEnum, registers: &mut Vec<Register>, instruction: InstructionType, memory_mode: MemoryModeEnum, mnemonic: &'static str) -> () {
+pub fn update_register_value(register_to_update: &str, value: ValueEnum, registers: &mut Vec<Register>, instruction: InstructionType, memory_mode: MemoryModeEnum, mnemonic: &'static str, is_word_size: bool) -> () {
     for register in registers.iter_mut() {
         if register.register == register_to_update {
             match instruction {
@@ -192,7 +193,19 @@ pub fn update_register_value(register_to_update: &str, value: ValueEnum, registe
                     match memory_mode {
                         MemoryModeEnum::RegisterMode | MemoryModeEnum::MemoryModeNoDisplacement | MemoryModeEnum::MemoryMode8Bit | MemoryModeEnum::MemoryMode16Bit | MemoryModeEnum::DirectMemoryOperation => {
                             match mnemonic {
-                                "mov" => register.updated_value = Value{value, is_signed: number_is_signed(value)},
+                                "mov" => {
+                                    if let ValueEnum::Uninitialized = value {
+                                        // We do the stuff in this branch because without it, if we initialize a register with 0 it's handled as "uninitialized" because the register
+                                        // has not been tinkered with yet. That is not however uninitialized, it's just initializing a register with 0.
+                                        if is_word_size {
+                                            register.updated_value = Value { value: ValueEnum::WordSize(0), is_signed: number_is_signed(value) }
+                                        } else {
+                                            register.updated_value = Value { value: ValueEnum::ByteSize(0), is_signed: number_is_signed(value) }
+                                        }
+                                    } else {
+                                        register.updated_value = Value { value, is_signed: number_is_signed(value) }
+                                    }
+                                },
                                 "add" => register.updated_value.wrap_add(value),
                                 "sub" => register.updated_value.wrap_sub(value),
                                 "cmp" => (),
