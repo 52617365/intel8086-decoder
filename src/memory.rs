@@ -162,8 +162,7 @@ pub fn load_memory_contents_as_decimal_and_optionally_update_original_value(memo
     }
 }
 
-// TODO: get rid of memory_mode in parameters because it's useless.
-pub fn store_memory_value(memory: &mut [memory_struct], memory_mode: MemoryModeEnum, memory_address: usize, displacement: usize, value: Value, mnemonic: &'static str, is_word_size: bool) -> () {
+pub fn store_memory_value(memory: &mut [memory_struct], memory_address: usize, displacement: usize, value: Value, mnemonic: &'static str, is_word_size: bool) -> () {
     let mut updated_memory_address = memory_address;
     updated_memory_address += displacement;
 

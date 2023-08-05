@@ -464,7 +464,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             if instruction_uses_memory(memory_mode) {
                 let address_from_disp = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
                 if memory_mode == DirectMemoryOperation {
-                    store_memory_value(memory, memory_mode, address_from_disp, 0, reg_immediate, mnemonic, is_word_size);
+                    store_memory_value(memory, address_from_disp, 0, reg_immediate, mnemonic, is_word_size);
                 } else {
                     if register_contains_multiple_registers(&rm_register) {
                         let (first_register, second_register) = get_registers_from_multiple_register(registers, &rm_register);
@@ -477,7 +477,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                                 ValueEnum::WordSize(val) => val as usize,
                                 ValueEnum::Uninitialized => panic!("We should not be initialized here because we checked for this before.")
                             };
-                            store_memory_value(memory, memory_mode, rm_value_casted, 0, reg_immediate, mnemonic, is_word_size);
+                            store_memory_value(memory, rm_value_casted, 0, reg_immediate, mnemonic, is_word_size);
                         }
                     }
                 }
@@ -509,11 +509,11 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                 if register_contains_multiple_registers(&rm_register) {
                     let combined_registers_from_rm = combine_register_containing_multiple_registers(registers, &rm_register);
                     let combined_registers_to_usize = combined_registers_from_rm.value.get_usize();
-                    store_memory_value(memory, memory_mode, combined_registers_to_usize, memory_address_displacement, reg.original_value, mnemonic, is_word_size);
+                    store_memory_value(memory, combined_registers_to_usize, memory_address_displacement, reg.original_value, mnemonic, is_word_size);
                 } else {
                     let rm = get_register_state(&rm_register, &registers);
                     let rm_value_to_usize = rm.updated_value.value.get_usize();
-                    store_memory_value(memory, memory_mode, rm_value_to_usize, memory_address_displacement, reg.original_value, mnemonic, is_word_size);
+                    store_memory_value(memory, rm_value_to_usize, memory_address_displacement, reg.original_value, mnemonic, is_word_size);
                 }
             }
         }
