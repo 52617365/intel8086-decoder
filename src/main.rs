@@ -9,9 +9,6 @@ TODO: On top of the testing we want to do, we also need to support the old homew
 TODO:
   Currently when we are setting the values into registers, the updated value stays at uninitialized if the value we set with is 0.
   This should not be the case because it means the register is initialized with 0.
-  "mov [bp + 0], ch", original_value: Value { value: ByteSize(12), is_signed: false }, updated_value: Value { value: ByteSize(244), is_signed: true }   NOTE: RIGHT
-  "mov [bp + 0], ch", original_value: Value { value: ByteSize(0),  is_signed: false }, updated_value: Value { value: ByteSize(0),   is_signed: false }  NOTE: WRONG
-
 */
 
 use bits::*;
@@ -519,8 +516,8 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                     store_memory_value(memory, memory_mode, combined_registers_to_usize, memory_address_displacement, reg.original_value, mnemonic, is_word_size);
                 } else {
                     let rm = get_register_state(&rm_register, &registers);
-                    let rm_value = rm.updated_value.value.get_usize();
-                    store_memory_value(memory, memory_mode, rm_value, memory_address_displacement, reg.original_value, mnemonic, is_word_size);
+                    let rm_value_to_usize = rm.updated_value.value.get_usize();
+                    store_memory_value(memory, memory_mode, rm_value_to_usize, memory_address_displacement, reg.original_value, mnemonic, is_word_size);
                 }
             }
         }
@@ -634,7 +631,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             flags: get_all_currently_set_flags(flag_registers),
         };
     }
-    else if !instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) && memory_mode == MemoryModeNoDisplacement || memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
+    else if !instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) {
         let reg = get_register_state(&reg_register, registers);
         if reg_is_dest {
             // In this branch the value is in the register.
@@ -655,7 +652,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                     flags: get_all_currently_set_flags(flag_registers),
                 }
             } else {
-                let rm = get_register_state(&reg_register, registers);
+                let rm = get_register_state(&rm_register, registers);
                 let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, rm.original_value.value.get_usize(), 0, is_word_size, true);
                 instruction_details = instruction_data{
                     formatted_instruction,
