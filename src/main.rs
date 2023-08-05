@@ -5,11 +5,6 @@ mod memory;
 
 /*
 TODO: On top of the testing we want to do, we also need to support the old homework because during the newer homework, the old ones broke.
-
-
-TODO:
-  Currently when we are setting the values into registers, the updated value stays at uninitialized if the value we set with is 0.
-  This should not be the case because it means the register is initialized with 0.
 */
 
 use bits::*;
@@ -994,7 +989,7 @@ mod tests {
             },
             instruction_data {
                 formatted_instruction: "mov [bp + si], cl".to_string(),
-                original_value: Value { value: ValueEnum::ByteSize(0), is_signed: true },
+                original_value: Value { value: ValueEnum::ByteSize(244), is_signed: true },
                 updated_value: Value { value: ValueEnum::ByteSize(12), is_signed: false },
                 flags: vec![],
             },
