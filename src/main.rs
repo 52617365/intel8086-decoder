@@ -868,7 +868,6 @@ fn combine_register_containing_multiple_registers(registers: &Vec<Register>, rm_
 
 #[cfg(test)]
 mod tests {
-    use crate::memory::word_sized_value_bytes;
     use super::*;
 
     #[test]
@@ -1393,4 +1392,96 @@ mod tests {
         assert_eq!(decoded_instructions, expected_instructions);
     }
 
+    #[test]
+    fn test_listing_0049() {
+        let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0049_conditional_jumps").unwrap();
+        let expected_instructions: Vec<instruction_data> = vec![
+            instruction_data {
+                formatted_instruction: "mov cx, 3".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(3), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov bx, 1000".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(1000), is_signed: false },
+                flags: vec![],
+            },
+
+            // First iteration
+            instruction_data {
+                formatted_instruction: "add bx, 10".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(1000), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(1010), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "sub cx, 1".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(3), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(2), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "jnz 248".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                flags: vec![],
+            },
+            // Second iteration
+            instruction_data {
+                formatted_instruction: "add bx, 10".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(1010), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(1020), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "sub cx, 1".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(2), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(1), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "jnz 248".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                flags: vec![],
+            },
+            // Third iteration
+            instruction_data {
+                formatted_instruction: "add bx, 10".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(1020), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(1030), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "sub cx, 1".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(1), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                flags: vec!["ZF"],  // This operation would set the zero flag since result is 0.
+            },
+            instruction_data {
+                formatted_instruction: "jnz 248".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                flags: vec!["ZF"],
+            },
+        ];
+
+        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
+
+        let mut registers = construct_registers();
+        let mut flag_registers = construct_flag_registers();
+        let op_codes = construct_opcodes();
+        let mut instruction_pointer: usize = 0;
+
+        let mut decoded_instructions: Vec<instruction_data> = Vec::new();
+        while instruction_pointer < binary_contents.len() {
+            let first_byte = binary_contents[instruction_pointer];
+            let instruction = determine_instruction(&op_codes, first_byte);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
+            decoded_instructions.push(decoded_instruction);
+        }
+        assert_eq!(decoded_instructions, expected_instructions);
+    }
 }
