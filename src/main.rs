@@ -267,7 +267,7 @@ fn main() {
 
     let mut old_instruction_pointer: usize = 0;
     let mut instruction_pointer: usize = 0;
-    let simulate_code = false;
+    let simulate_code = true;
     while instruction_pointer < binary_contents.len() {
         old_instruction_pointer = instruction_pointer;
         let first_byte = binary_contents[instruction_pointer];
@@ -1190,6 +1190,105 @@ mod tests {
                 formatted_instruction: "mov di, 8".to_string(),
                 original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::WordSize(8), is_signed: false },
+                flags: vec![],
+            },
+        ];
+        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
+
+        let mut registers = construct_registers();
+        let flag_registers = construct_flag_registers();
+        let op_codes = construct_opcodes();
+        let mut instruction_pointer: usize = 0;
+
+        let mut decoded_instructions: Vec<instruction_data> = Vec::new();
+        while instruction_pointer < binary_contents.len() {
+            let first_byte = binary_contents[instruction_pointer];
+            let instruction = determine_instruction(&op_codes, first_byte);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, true);
+            decoded_instructions.push(decoded_instruction);
+        }
+        assert_eq!(decoded_instructions, expected_instructions);
+    }
+
+    #[test]
+    fn test_listing_0044() {
+        let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0044_register_movs").unwrap();
+        let expected_instructions: Vec<instruction_data> = vec![
+            // Direct value assignments
+            instruction_data {
+                formatted_instruction: "mov ax, 1".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(1), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov bx, 2".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(2), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov cx, 3".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(3), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov dx, 4".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(4), is_signed: false },
+                flags: vec![],
+            },
+
+            // Moving values between registers
+            instruction_data {
+                formatted_instruction: "mov sp, ax".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(1), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov bp, bx".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(2), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov si, cx".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(3), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov di, dx".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(4), is_signed: false },
+                flags: vec![],
+            },
+
+            // Moving values back to other registers
+            instruction_data {
+                formatted_instruction: "mov dx, sp".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(4), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(1), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov cx, bp".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(3), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(2), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov bx, si".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(2), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(3), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov ax, di".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(1), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(4), is_signed: false },
                 flags: vec![],
             },
         ];
