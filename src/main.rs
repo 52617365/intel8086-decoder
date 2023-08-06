@@ -848,7 +848,11 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
         || instruction == LOOPNZ
         || instruction == JCXZ
     {
-        return format!("{} {}", mnemonic, second_byte as usize);
+        if number_is_signed(ValueEnum::ByteSize(second_byte)) {
+            return format!("{} -{}", mnemonic, twos_complement(second_byte));
+        } else {
+            return format!("{} {}", mnemonic, second_byte as usize);
+        }
     } else {
         panic!("Unknown instruction: {:?}, did not expect to get here.", instruction);
     }
@@ -1115,29 +1119,29 @@ mod tests {
 
             // labels and jump instructions
             "jnz 2",
-            "jnz 252",
-            "jnz 250",
-            "jnz 252",
-            "je 254",
-            "jl 252",
-            "jle 250",
-            "jb 248",
-            "jbe 246",
-            "jp 244",
-            "jo 242",
-            "js 240",
-            "jnz 238",
-            "jnl 236",
-            "jg 234",
-            "jnb 232",
-            "ja 230",
-            "jnp 228",
-            "jno 226",
-            "jns 224",
-            "loop 222",
-            "loopz 220",
-            "loopnz 218",
-            "jcxz 216",
+            "jnz -4",
+            "jnz -6",
+            "jnz -4",
+            "je -2",
+            "jl -4",
+            "jle -6",
+            "jb -8",
+            "jbe -10",
+            "jp -12",
+            "jo -14",
+            "js -16",
+            "jnz -18",
+            "jnl -20",
+            "jg -22",
+            "jnb -24",
+            "ja -26",
+            "jnp -28",
+            "jno -30",
+            "jns -32",
+            "loop -34",
+            "loopz -36",
+            "loopnz -38",
+            "jcxz -40",
         ];
         assert_eq!(decoded_instructions, expected_instructions);
     }
@@ -1421,7 +1425,7 @@ mod tests {
                 flags: vec![],
             },
             instruction_data {
-                formatted_instruction: "jnz 248".to_string(),
+                formatted_instruction: "jnz -8".to_string(),
                 original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 flags: vec![],
@@ -1440,7 +1444,7 @@ mod tests {
                 flags: vec![],
             },
             instruction_data {
-                formatted_instruction: "jnz 248".to_string(),
+                formatted_instruction: "jnz -8".to_string(),
                 original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 flags: vec![],
@@ -1459,7 +1463,7 @@ mod tests {
                 flags: vec!["ZF"],  // This operation would set the zero flag since result is 0.
             },
             instruction_data {
-                formatted_instruction: "jnz 248".to_string(),
+                formatted_instruction: "jnz -8".to_string(),
                 original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 flags: vec!["ZF"],
