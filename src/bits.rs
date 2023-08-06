@@ -126,7 +126,6 @@ const IMMEDIATE_TO_ACCUMULATOR_CMP_ID: [u8; 2] = [
     0b00111100, 0b00111101
 ];
 
-// NOTE: Jumps have a 8 bit displacement in the second byte.
 
 pub struct OpCode {
     bit_pattern: u8,

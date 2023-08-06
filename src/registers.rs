@@ -56,8 +56,7 @@ impl Value {
                 let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
                 *self = val;
             },
-            // ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
-            ValueEnum::Uninitialized => (), // NOTE: I think this can be a NOP because it would do nothing anyway if the value we're trying to wrap add with is not initialized.
+            ValueEnum::Uninitialized => (),
         }
     }
 
@@ -75,8 +74,7 @@ impl Value {
                 let val = Value{value: result_after_wrap, is_signed: number_is_signed(result_after_wrap)};
                 *self = val;
             },
-            // ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
-            ValueEnum::Uninitialized => (), // NOTE: I think this can be a NOP because it would do nothing anyway if the value we're trying to wrap add with is not initialized.
+            ValueEnum::Uninitialized => (),
         }
     }
 

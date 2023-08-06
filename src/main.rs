@@ -249,7 +249,7 @@ fn get_mnemonic(first_byte: u8, second_byte: u8, inst: InstructionType) -> &'sta
             _ => panic!("unknown instruction: {:?}, first_byte: {:08b}, reg_field: {:08b}", inst, first_byte, reg_field)
         }
     } else {
-        todo!()
+        panic!("this is not supported, why did we get here?");
     }
 }
 
@@ -299,7 +299,7 @@ impl PartialEq for instruction_data {
     }
 }
 fn instruction_has_immediate_value_in_rm_register(instruction: InstructionType, memory_mode: MemoryModeEnum) -> bool {
-    return memory_mode != DirectMemoryOperation && instruction == ImmediateToRegisterMOV
+    return instruction == ImmediateToRegisterMOV;
 }
 
 fn instruction_has_immediate_value_in_reg_register(instruction: InstructionType) -> bool {
@@ -308,33 +308,31 @@ fn instruction_has_immediate_value_in_reg_register(instruction: InstructionType)
 
 
 fn get_immediate_from_rm_register(instruction: InstructionType, is_word_size: bool, memory_mode: MemoryModeEnum, instruction_pointer: usize, binary_contents: &Vec<u8>) -> Value {
-    if memory_mode != DirectMemoryOperation {
-        // This case is actually the complete opposite from the previous one.
-        // The immediate to register MOV instruction actually does not have the R/M register
-        // but has the REG register it used to move immediate values to.
-        if instruction == ImmediateToRegisterMOV {
-            // and the R/M Register actually is not used at all with the MOV immediate instruction.
+            // This case is actually the complete opposite from the previous one.
+            // The immediate to register MOV instruction actually does not have the R/M register
+            // but has the REG register it used to move immediate values to.
+            if instruction == ImmediateToRegisterMOV {
+                // and the R/M Register actually is not used at all with the MOV immediate instruction.
 
-            // With the immediate to register mov instruction, the immediate is stored in the second (and third byte if word sized).
-            let second_byte = binary_contents[instruction_pointer + 1];
-            if is_word_size {
-                let third_byte = binary_contents[instruction_pointer + 2];
-                let combined = combine_bytes(third_byte, second_byte);
-                let value = ValueEnum::WordSize(combined);
-                return Value{
-                    value,
-                    is_signed: number_is_signed(value),
-                };
-            } else {
-                let value = ValueEnum::ByteSize(second_byte);
-                return Value{
-                    value,
-                    is_signed: number_is_signed(value),
-                };
+                // With the immediate to register mov instruction, the immediate is stored in the second (and third byte if word sized).
+                let second_byte = binary_contents[instruction_pointer + 1];
+                if is_word_size {
+                    let third_byte = binary_contents[instruction_pointer + 2];
+                    let combined = combine_bytes(third_byte, second_byte);
+                    let value = ValueEnum::WordSize(combined);
+                    return Value {
+                        value,
+                        is_signed: number_is_signed(value),
+                    };
+                } else {
+                    let value = ValueEnum::ByteSize(second_byte);
+                    return Value {
+                        value,
+                        is_signed: number_is_signed(value),
+                    };
             }
-        }
     }
-    panic!("We thought that the rm register contained an immediate when it did not.")
+    panic!("we thought rm register contained an immediate when it did not.")
 }
 
 fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType, is_s_bit_set: bool, is_word_size: bool, memory_mode: MemoryModeEnum, instruction_pointer: usize, binary_contents: &Vec<u8>) -> Value {
@@ -367,7 +365,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
                         let combined = combine_bytes(sixth_byte, fifth_byte);
                         let value = ValueEnum::WordSize(combined);
                         return Value{
-                            value, 
+                            value,
                             is_signed: number_is_signed(value),
                         };
                     } else {
@@ -377,7 +375,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
 
                         let value = ValueEnum::WordSize(combined);
                         return Value{
-                            value, 
+                            value,
                             is_signed: number_is_signed(value),
                         };
                     }
@@ -398,7 +396,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
 
                         let value = ValueEnum::ByteSize(third_byte);
                         return Value{
-                            value, 
+                            value,
                             is_signed: number_is_signed(value),
                         };
                     }
@@ -413,14 +411,14 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
             let combined = combine_bytes(third_byte, second_byte);
             let value = ValueEnum::WordSize(combined);
             return Value{
-                value, 
+                value,
                 is_signed: number_is_signed(value),
             };
 
         } else {
             let value = ValueEnum::ByteSize(second_byte);
             return Value{
-                value, 
+                value,
                 is_signed: number_is_signed(value),
             };
         }
@@ -677,8 +675,6 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         update_original_register_value(reg.register, reg.updated_value.value, registers);
     } else if instruction_uses_memory(memory_mode) {
         // TODO: fill
-        // NOTE: We update the original_bits of memory inside the get_memory_contents_as_decimal_and_update_original_value function that
-        //  returns a struct of the original and updated_value, should we do the same with registers? It could be easier that way.
     } else {
         let rm = get_register_state(&rm_register, &registers);
         update_original_register_value(rm.register, rm.updated_value.value, registers);
@@ -703,7 +699,6 @@ fn get_registers_from_multiple_register(registers: &Vec<Register>, rm_register: 
     (first_register, second_register)
 }
 
-// TODO: why is perform_conditional_jump making an infinite loop?
 fn perform_conditional_jump(flag_registers: &mut [FlagRegister; 2], instruction_size: usize, instruction_pointer: &mut usize, second_byte: u8, instruction: InstructionType) {
     let mut jump_happens = false;
 
@@ -875,14 +870,14 @@ mod tests {
     fn test_listing_0038() {
         let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0038_many_register_mov").unwrap();
 
-        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct{bits: 0, initialized: false}, original_bits: bits_struct{bits: 0, initialized: false}} }; 64000];
+        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
 
         let mut registers = construct_registers();
         let flag_registers = construct_flag_registers();
         let op_codes = construct_opcodes();
         let mut instruction_pointer: usize = 0;
 
-        let mut decoded_instructions : Vec<String> = Vec::new();
+        let mut decoded_instructions: Vec<String> = Vec::new();
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             // let second_byte = binary_contents[instruction_pointer + 1];
@@ -1002,14 +997,14 @@ mod tests {
                 flags: vec![],
             },
         ];
-        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct{bits: 0, initialized: false}, original_bits: bits_struct{bits: 0, initialized: false}} }; 64000];
+        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
 
         let mut registers = construct_registers();
         let flag_registers = construct_flag_registers();
         let op_codes = construct_opcodes();
         let mut instruction_pointer: usize = 0;
 
-        let mut decoded_instructions : Vec<instruction_data> = Vec::new();
+        let mut decoded_instructions: Vec<instruction_data> = Vec::new();
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
@@ -1018,129 +1013,200 @@ mod tests {
         }
         assert_eq!(decoded_instructions, expected_instructions);
     }
-}
-#[test]
-fn test_listing_0041() {
-    let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0041_add_sub_cmp_jnz").unwrap();
-    let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct{bits: 0, initialized: false}, original_bits: bits_struct{bits: 0, initialized: false}} }; 64000];
 
-    let mut registers = construct_registers();
-    let flag_registers = construct_flag_registers();
-    let op_codes = construct_opcodes();
-    let mut instruction_pointer: usize = 0;
+    #[test]
+    fn test_listing_0041() {
+        let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0041_add_sub_cmp_jnz").unwrap();
+        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
 
-    let mut decoded_instructions : Vec<String> = Vec::new();
-    while instruction_pointer < binary_contents.len() {
-        let first_byte = binary_contents[instruction_pointer];
-        let instruction = determine_instruction(&op_codes, first_byte);
-        let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, false);
-        decoded_instructions.push(decoded_instruction.formatted_instruction);
+        let mut registers = construct_registers();
+        let flag_registers = construct_flag_registers();
+        let op_codes = construct_opcodes();
+        let mut instruction_pointer: usize = 0;
+
+        let mut decoded_instructions: Vec<String> = Vec::new();
+        while instruction_pointer < binary_contents.len() {
+            let first_byte = binary_contents[instruction_pointer];
+            let instruction = determine_instruction(&op_codes, first_byte);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, false);
+            decoded_instructions.push(decoded_instruction.formatted_instruction);
+        }
+
+        let expected_instructions: Vec<&str> = vec![
+            // add instructions
+            "add bx, [bx + si]",
+            "add bx, [bp + 0]",
+            "add si, 2",
+            "add bp, 2",
+            "add cx, 8",
+            "add bx, [bp + 0]",
+            "add cx, [bx + 2]",
+            "add bh, [bp + si + 4]",
+            "add di, [bp + di + 6]",
+            "add [bx + si], bx",
+            "add [bp + 0], bx",
+            "add [bp + 0], bx",
+            "add [bx + 2], cx",
+            "add [bp + si + 4], bh",
+            "add [bp + di + 6], di",
+            "add byte [bx], 34",
+            "add word [bp + si + 1000], 29",
+            "add ax, [bp + 0]",
+            "add al, [bx + si]",
+            "add ax, bx",
+            "add al, ah",
+            "add ax, 1000",
+            "add al, -30",
+            "add al, 9",
+
+            // sub instructions
+            "sub bx, [bx + si]",
+            "sub bx, [bp + 0]",
+            "sub si, 2",
+            "sub bp, 2",
+            "sub cx, 8",
+            "sub bx, [bp + 0]",
+            "sub cx, [bx + 2]",
+            "sub bh, [bp + si + 4]",
+            "sub di, [bp + di + 6]",
+            "sub [bx + si], bx",
+            "sub [bp + 0], bx",
+            "sub [bp + 0], bx",
+            "sub [bx + 2], cx",
+            "sub [bp + si + 4], bh",
+            "sub [bp + di + 6], di",
+            "sub byte [bx], 34",
+            "sub word [bx + di], 29",
+            "sub ax, [bp + 0]",
+            "sub al, [bx + si]",
+            "sub ax, bx",
+            "sub al, ah",
+            "sub ax, 1000",
+            "sub al, -30",
+            "sub al, 9",
+
+            // cmp instructions
+            "cmp bx, [bx + si]",
+            "cmp bx, [bp + 0]",
+            "cmp si, 2",
+            "cmp bp, 2",
+            "cmp cx, 8",
+            "cmp bx, [bp + 0]",
+            "cmp cx, [bx + 2]",
+            "cmp bh, [bp + si + 4]",
+            "cmp di, [bp + di + 6]",
+            "cmp [bx + si], bx",
+            "cmp [bp + 0], bx",
+            "cmp [bp + 0], bx",
+            "cmp [bx + 2], cx",
+            "cmp [bp + si + 4], bh",
+            "cmp [bp + di + 6], di",
+            "cmp byte [bx], 34",
+            "cmp word [4834], 29",
+            "cmp ax, [bp + 0]",
+            "cmp al, [bx + si]",
+            "cmp ax, bx",
+            "cmp al, ah",
+            "cmp ax, 1000",
+            "cmp al, -30",
+            "cmp al, 9",
+
+            // labels and jump instructions
+            "jnz 2",
+            "jnz 252",
+            "jnz 250",
+            "jnz 252",
+            "je 254",
+            "jl 252",
+            "jle 250",
+            "jb 248",
+            "jbe 246",
+            "jp 244",
+            "jo 242",
+            "js 240",
+            "jnz 238",
+            "jnl 236",
+            "jg 234",
+            "jnb 232",
+            "ja 230",
+            "jnp 228",
+            "jno 226",
+            "jns 224",
+            "loop 222",
+            "loopz 220",
+            "loopnz 218",
+            "jcxz 216",
+        ];
+        assert_eq!(decoded_instructions, expected_instructions);
     }
 
-    let expected_instructions: Vec<&str> = vec![
-        // add instructions
-        "add bx, [bx + si]",
-        "add bx, [bp + 0]",
-        "add si, 2",
-        "add bp, 2",
-        "add cx, 8",
-        "add bx, [bp + 0]",
-        "add cx, [bx + 2]",
-        "add bh, [bp + si + 4]",
-        "add di, [bp + di + 6]",
-        "add [bx + si], bx",
-        "add [bp + 0], bx",
-        "add [bp + 0], bx",
-        "add [bx + 2], cx",
-        "add [bp + si + 4], bh",
-        "add [bp + di + 6], di",
-        "add byte [bx], 34",
-        "add word [bp + si + 1000], 29",
-        "add ax, [bp + 0]",
-        "add al, [bx + si]",
-        "add ax, bx",
-        "add al, ah",
-        "add ax, 1000",
-        "add al, -30",
-        "add al, 9",
+    #[test]
+    fn test_listing_0043() {
+        let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0043_immediate_movs").unwrap();
+        let expected_instructions: Vec<instruction_data> = vec![
+            instruction_data {
+                formatted_instruction: "mov ax, 1".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(1), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov bx, 2".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(2), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov cx, 3".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(3), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov dx, 4".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(4), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov sp, 5".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(5), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov bp, 6".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(6), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov si, 7".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(7), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov di, 8".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(8), is_signed: false },
+                flags: vec![],
+            },
+        ];
+        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
 
-        // sub instructions
-        "sub bx, [bx + si]",
-        "sub bx, [bp + 0]",
-        "sub si, 2",
-        "sub bp, 2",
-        "sub cx, 8",
-        "sub bx, [bp + 0]",
-        "sub cx, [bx + 2]",
-        "sub bh, [bp + si + 4]",
-        "sub di, [bp + di + 6]",
-        "sub [bx + si], bx",
-        "sub [bp + 0], bx",
-        "sub [bp + 0], bx",
-        "sub [bx + 2], cx",
-        "sub [bp + si + 4], bh",
-        "sub [bp + di + 6], di",
-        "sub byte [bx], 34",
-        "sub word [bx + di], 29",
-        "sub ax, [bp + 0]",
-        "sub al, [bx + si]",
-        "sub ax, bx",
-        "sub al, ah",
-        "sub ax, 1000",
-        "sub al, -30",
-        "sub al, 9",
+        let mut registers = construct_registers();
+        let flag_registers = construct_flag_registers();
+        let op_codes = construct_opcodes();
+        let mut instruction_pointer: usize = 0;
 
-        // cmp instructions
-        "cmp bx, [bx + si]",
-        "cmp bx, [bp + 0]",
-        "cmp si, 2",
-        "cmp bp, 2",
-        "cmp cx, 8",
-        "cmp bx, [bp + 0]",
-        "cmp cx, [bx + 2]",
-        "cmp bh, [bp + si + 4]",
-        "cmp di, [bp + di + 6]",
-        "cmp [bx + si], bx",
-        "cmp [bp + 0], bx",
-        "cmp [bp + 0], bx",
-        "cmp [bx + 2], cx",
-        "cmp [bp + si + 4], bh",
-        "cmp [bp + di + 6], di",
-        "cmp byte [bx], 34",
-        "cmp word [4834], 29",
-        "cmp ax, [bp + 0]",
-        "cmp al, [bx + si]",
-        "cmp ax, bx",
-        "cmp al, ah",
-        "cmp ax, 1000",
-        "cmp al, -30",
-        "cmp al, 9",
-
-        // labels and jump instructions
-        "jnz 2",
-        "jnz 252",
-        "jnz 250",
-        "jnz 252",
-        "je 254",
-        "jl 252",
-        "jle 250",
-        "jb 248",
-        "jbe 246",
-        "jp 244",
-        "jo 242",
-        "js 240",
-        "jnz 238",
-        "jnl 236",
-        "jg 234",
-        "jnb 232",
-        "ja 230",
-        "jnp 228",
-        "jno 226",
-        "jns 224",
-        "loop 222",
-        "loopz 220",
-        "loopnz 218",
-        "jcxz 216",
-    ];
-    assert_eq!(decoded_instructions, expected_instructions);
+        let mut decoded_instructions: Vec<instruction_data> = Vec::new();
+        while instruction_pointer < binary_contents.len() {
+            let first_byte = binary_contents[instruction_pointer];
+            let instruction = determine_instruction(&op_codes, first_byte);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, true);
+            decoded_instructions.push(decoded_instruction);
+        }
+        assert_eq!(decoded_instructions, expected_instructions);
+    }
 }
