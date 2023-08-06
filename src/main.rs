@@ -9,14 +9,14 @@ TODO: On top of the testing we want to do, we also need to support the old homew
 
 use bits::*;
 
-use crate::memory::{bits_struct, get_displacement, load_memory_contents_as_decimal_and_optionally_update_original_value, memory_contents, memory_struct, store_memory_value};
+use crate::memory::{bits_struct, get_displacement, load_memory_contents_as_decimal_and_optionally_update_original_value, memory_contents, memory_struct, store_memory_value, word_sized_value_bytes};
 use crate::bits::combine_bytes;
 use core::panic;
 use std::{env, fs};
 use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumulatorCMP, ImmediateToRegisterMemory, ImmediateToRegisterMOV, ImmediateToAccumulatorSUB, RegisterMemory, JE_JUMP, JL_JUMP, JLE_JUMP, JB_JUMP, JBE_JUMP, JP_JUMP, JO_JUMP, JS_JUMP, JNE_JUMP, JNL_JUMP, LOOP, LOOPZ, JCXZ, LOOPNZ, JNS, JNO_JUMP, JNBE_JUMP, JNP_JUMP, JNB_JUMP, JNLE_JUMP};
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
-use crate::flag_registers::number_is_signed;
+use crate::flag_registers::{number_is_signed, twos_complement};
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
 use crate::registers::{Value, ValueEnum, construct_registers, get_register_state, Register, register_contains_multiple_registers, update_original_register_value, update_register_value};
 use crate::flag_registers::{construct_flag_registers, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, FlagRegister};
@@ -263,7 +263,7 @@ fn main() {
 
     let mut registers = construct_registers();
     let op_codes = construct_opcodes();
-    let flag_registers = construct_flag_registers();
+    let mut flag_registers = construct_flag_registers();
 
     let mut old_instruction_pointer: usize = 0;
     let mut instruction_pointer: usize = 0;
@@ -272,7 +272,7 @@ fn main() {
         old_instruction_pointer = instruction_pointer;
         let first_byte = binary_contents[instruction_pointer];
         let instruction = determine_instruction(&op_codes, first_byte);
-        let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, simulate_code);
+        let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, simulate_code);
 
         if simulate_code {
             println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", decoded_instruction.formatted_instruction, decoded_instruction.original_value.get_string_number_from_bits(), decoded_instruction.updated_value.get_string_number_from_bits(), decoded_instruction.flags, old_instruction_pointer, instruction_pointer);
@@ -426,7 +426,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
     panic!("We thought that the reg register contained an immediate when it did not.")
 }
 
-fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, registers: &mut Vec<Register>, mut flag_registers: [FlagRegister; 2], memory: &mut [memory_struct; 64000], instruction_pointer: &mut usize, simulate: bool) -> instruction_data {
+fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, registers: &mut Vec<Register>, flag_registers: &mut [FlagRegister; 2], memory: &mut [memory_struct; 64000], instruction_pointer: &mut usize, simulate: bool) -> instruction_data {
     let first_byte = binary_contents[*instruction_pointer];
     let second_byte = binary_contents[*instruction_pointer + 1];
 
@@ -559,10 +559,10 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                         value = rm.updated_value.value;
                     }
                 }
-                set_flags(value, &mut flag_registers);
+                set_flags(value, flag_registers);
             } else {
                 // We don't clear if it's a conditional jump because the jnz conditional jump for example relies on the flags to know when to stop jumping.
-                clear_flags_registers(&mut flag_registers);
+                clear_flags_registers(flag_registers);
             }
         }
     }
@@ -683,10 +683,11 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
     assert_ne!(instruction_details.formatted_instruction, "", "instruction_details struct is not initialized, this should never happen.");
 
     if instruction_is_conditional_jump(instruction) && simulate {
-        perform_conditional_jump(&mut flag_registers, instruction_size, instruction_pointer, second_byte, instruction);
+        perform_conditional_jump(flag_registers, instruction_size, instruction_pointer, second_byte, instruction);
     } else {
         *instruction_pointer += instruction_size;
     }
+
 
     return instruction_details;
 }
@@ -731,8 +732,12 @@ fn perform_conditional_jump(flag_registers: &mut [FlagRegister; 2], instruction_
         // let offset = twos_complement(second_byte) as usize;
         // We might need to add logic in case the jump is forwards but
         // that was not in the assignment so I'm not going to worry about that yet.
-        let jump = second_byte as usize + instruction_size;
-        *instruction_pointer -= jump
+        // let offset = twos_complement(second_byte);
+        let jump = second_byte.wrapping_add(instruction_size as u8);
+        let offset = twos_complement(jump) as usize;
+        *instruction_pointer -= offset;
+    } else {
+        *instruction_pointer += instruction_size;
     }
 }
 
@@ -873,7 +878,7 @@ mod tests {
         let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
 
         let mut registers = construct_registers();
-        let flag_registers = construct_flag_registers();
+        let mut flag_registers = construct_flag_registers();
         let op_codes = construct_opcodes();
         let mut instruction_pointer: usize = 0;
 
@@ -882,7 +887,7 @@ mod tests {
             let first_byte = binary_contents[instruction_pointer];
             // let second_byte = binary_contents[instruction_pointer + 1];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, false);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, false);
 
             decoded_instructions.push(decoded_instruction.formatted_instruction);
 
@@ -1000,7 +1005,7 @@ mod tests {
         let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
 
         let mut registers = construct_registers();
-        let flag_registers = construct_flag_registers();
+        let mut flag_registers = construct_flag_registers();
         let op_codes = construct_opcodes();
         let mut instruction_pointer: usize = 0;
 
@@ -1008,7 +1013,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, true);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
             decoded_instructions.push(decoded_instruction);
         }
         assert_eq!(decoded_instructions, expected_instructions);
@@ -1020,7 +1025,7 @@ mod tests {
         let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
 
         let mut registers = construct_registers();
-        let flag_registers = construct_flag_registers();
+        let mut flag_registers = construct_flag_registers();
         let op_codes = construct_opcodes();
         let mut instruction_pointer: usize = 0;
 
@@ -1028,7 +1033,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, false);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, false);
             decoded_instructions.push(decoded_instruction.formatted_instruction);
         }
 
@@ -1196,7 +1201,7 @@ mod tests {
         let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
 
         let mut registers = construct_registers();
-        let flag_registers = construct_flag_registers();
+        let mut flag_registers = construct_flag_registers();
         let op_codes = construct_opcodes();
         let mut instruction_pointer: usize = 0;
 
@@ -1204,7 +1209,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, true);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
             decoded_instructions.push(decoded_instruction);
         }
         assert_eq!(decoded_instructions, expected_instructions);
@@ -1295,7 +1300,7 @@ mod tests {
         let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
 
         let mut registers = construct_registers();
-        let flag_registers = construct_flag_registers();
+        let mut flag_registers = construct_flag_registers();
         let op_codes = construct_opcodes();
         let mut instruction_pointer: usize = 0;
 
@@ -1303,7 +1308,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, true);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
             decoded_instructions.push(decoded_instruction);
         }
         assert_eq!(decoded_instructions, expected_instructions);
@@ -1374,7 +1379,7 @@ mod tests {
         let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
 
         let mut registers = construct_registers();
-        let flag_registers = construct_flag_registers();
+        let mut flag_registers = construct_flag_registers();
         let op_codes = construct_opcodes();
         let mut instruction_pointer: usize = 0;
 
@@ -1382,7 +1387,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, true);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
             decoded_instructions.push(decoded_instruction);
         }
         assert_eq!(decoded_instructions, expected_instructions);

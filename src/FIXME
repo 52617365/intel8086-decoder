@@ -1,3 +1,0 @@
-Things to fix in the current decoder.
-
-- During listing 0041, we run into an infinite loop when dealing with conditional jumps

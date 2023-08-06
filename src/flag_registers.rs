@@ -31,8 +31,8 @@ pub fn construct_flag_registers() -> [FlagRegister; 2] {
     return flags;
 }
 
-pub fn flag_register_is_set(flag: &'static str, flag_registers: &[FlagRegister]) -> bool {
-    for flag_register in flag_registers.iter() {
+pub fn flag_register_is_set(flag: &'static str, flag_registers: &mut [FlagRegister]) -> bool {
+    for flag_register in flag_registers.iter_mut() {
         if flag_register.register == flag {
             return flag_register.is_set;
         }
@@ -50,7 +50,7 @@ pub fn set_is_set_for_flag_register(flag: &'static str, flag_registers: &mut [Fl
     panic!("Flag {} not found", flag);
 }
 
-pub fn set_flags(destination_value: ValueEnum, flag_registers: &mut [FlagRegister]) -> () {
+pub fn set_flags(destination_value: ValueEnum, flag_registers: &mut [FlagRegister; 2]) -> () {
     let destination_value_integer = match destination_value {
         ValueEnum::ByteSize(val) => val as usize,
         ValueEnum::WordSize(val) => val as usize,
@@ -65,14 +65,12 @@ pub fn set_flags(destination_value: ValueEnum, flag_registers: &mut [FlagRegiste
 
     if number_is_signed(destination_value) {
         set_is_set_for_flag_register("SF", flag_registers, true);
-        return
     } else {
         set_is_set_for_flag_register("SF", flag_registers, false);
-        return
     }
 }
 
-pub fn get_all_currently_set_flags(flag_registers: [FlagRegister; 2]) -> Vec<&'static str> {
+pub fn get_all_currently_set_flags(flag_registers: &mut [FlagRegister; 2]) -> Vec<&'static str> {
     let mut flags: Vec<&str> = Vec::with_capacity(flag_registers.len());
     for flag_register in flag_registers.iter() {
         if flag_register.is_set {
