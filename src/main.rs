@@ -1308,4 +1308,84 @@ mod tests {
         }
         assert_eq!(decoded_instructions, expected_instructions);
     }
+
+    #[test]
+    fn test_listing_0046() {
+        let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0046_add_sub_cmp").unwrap();
+        let expected_instructions: Vec<instruction_data> = vec![
+            // Direct value assignments
+            instruction_data {
+                formatted_instruction: "mov bx, -4093".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(61443), is_signed: true },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov cx, 3841".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(3841), is_signed: false },
+                flags: vec![],
+            },
+
+            // Operation on registers
+            instruction_data {
+                formatted_instruction: "sub bx, cx".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(61443), is_signed: true },
+                updated_value: Value { value: ValueEnum::WordSize(57602), is_signed: true },
+                flags: vec!["SF"],  // You can add relevant flags affected by the operation if needed.
+            },
+
+            // Direct value assignments
+            instruction_data {
+                formatted_instruction: "mov sp, 998".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(998), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "mov bp, 999".to_string(),
+                original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(999), is_signed: false },
+                flags: vec![],
+            },
+
+            // Compare operation
+            instruction_data {
+                formatted_instruction: "cmp bp, sp".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(999), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(999), is_signed: false },
+                flags: vec![],  // You can add relevant flags affected by the compare operation if needed.
+            },
+
+            // Arithmetic operations
+            instruction_data {
+                formatted_instruction: "add bp, 1027".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(999), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(2026), is_signed: false },
+                flags: vec![],
+            },
+            instruction_data {
+                formatted_instruction: "sub bp, 2026".to_string(),
+                original_value: Value { value: ValueEnum::WordSize(2026), is_signed: false },
+                updated_value: Value { value: ValueEnum::WordSize(0), is_signed: false },
+                flags: vec!["ZF"],
+            },
+        ];
+        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
+
+        let mut registers = construct_registers();
+        let flag_registers = construct_flag_registers();
+        let op_codes = construct_opcodes();
+        let mut instruction_pointer: usize = 0;
+
+        let mut decoded_instructions: Vec<instruction_data> = Vec::new();
+        while instruction_pointer < binary_contents.len() {
+            let first_byte = binary_contents[instruction_pointer];
+            let instruction = determine_instruction(&op_codes, first_byte);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, true);
+            decoded_instructions.push(decoded_instruction);
+        }
+        assert_eq!(decoded_instructions, expected_instructions);
+    }
+
 }
