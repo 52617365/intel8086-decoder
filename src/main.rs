@@ -471,13 +471,17 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                         // TODO: fill this.
                     } else {
                         let rm = get_register_state(&rm_register, registers).updated_value;
-                        if let ValueEnum::Uninitialized = rm.value {} else {
-                            let rm_value_casted = match rm.value {
-                                ValueEnum::ByteSize(val) => val as usize,
-                                ValueEnum::WordSize(val) => val as usize,
-                                ValueEnum::Uninitialized => panic!("We should not be initialized here because we checked for this before.")
-                            };
-                            store_memory_value(memory, rm_value_casted, 0, reg_immediate, mnemonic, is_word_size);
+                        if let ValueEnum::Uninitialized = rm.value {}
+                        else {
+                            if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
+                                let rm_value_casted = rm.value.get_usize();
+                                let memory_address_displacement = get_displacement(&binary_contents, *instruction_pointer, memory_mode);
+
+                                store_memory_value(memory, rm_value_casted, memory_address_displacement, reg_immediate, mnemonic, is_word_size);
+                            } else {
+                                let rm_value_casted = rm.value.get_usize();
+                                store_memory_value(memory, rm_value_casted, 0, reg_immediate, mnemonic, is_word_size);
+                            }
                         }
                     }
                 }
