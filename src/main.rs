@@ -893,12 +893,6 @@ mod tests {
             let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, false);
 
             decoded_instructions.push(decoded_instruction.formatted_instruction);
-
-            // println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", decoded_instruction.formatted_instruction, decoded_instruction.original_value, decoded_instruction.updated_value, get_all_currently_set_flags(flag_registers), decoded_instruction.original_instruction_pointer, decoded_instruction.updated_instruction_pointer);
-
-            // if instruction_is_conditional_jump(instruction) {
-            //     perform_conditional_jump(&mut flag_registers, instruction_size, &mut instruction_pointer, second_byte, instruction);
-            // }
         }
         let expected_decoded_instructions = "mov cx, bx\nmov ch, ah\nmov dx, bx\nmov si, bx\nmov bx, di\nmov al, cl\nmov ch, ch\nmov bx, ax\nmov bx, si\nmov sp, di\nmov bp, ax";
         assert_eq!(decoded_instructions.join("\n"), expected_decoded_instructions);
