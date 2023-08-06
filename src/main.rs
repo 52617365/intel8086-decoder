@@ -9,7 +9,7 @@ TODO: On top of the testing we want to do, we also need to support the old homew
 
 use bits::*;
 
-use crate::memory::{bits_struct, get_displacement, load_memory_contents_as_decimal_and_optionally_update_original_value, memory_contents, memory_struct, store_memory_value, word_sized_value_bytes};
+use crate::memory::{bits_struct, get_displacement, load_memory_contents_as_decimal_and_optionally_update_original_value, memory_contents, memory_struct, store_memory_value};
 use crate::bits::combine_bytes;
 use core::panic;
 use std::{env, fs};
@@ -298,7 +298,7 @@ impl PartialEq for instruction_data {
             self.flags == other.flags
     }
 }
-fn instruction_has_immediate_value_in_rm_register(instruction: InstructionType, memory_mode: MemoryModeEnum) -> bool {
+fn instruction_has_immediate_value_in_rm_register(instruction: InstructionType) -> bool {
     return instruction == ImmediateToRegisterMOV;
 }
 
@@ -307,7 +307,7 @@ fn instruction_has_immediate_value_in_reg_register(instruction: InstructionType)
 }
 
 
-fn get_immediate_from_rm_register(instruction: InstructionType, is_word_size: bool, memory_mode: MemoryModeEnum, instruction_pointer: usize, binary_contents: &Vec<u8>) -> Value {
+fn get_immediate_from_rm_register(instruction: InstructionType, is_word_size: bool, instruction_pointer: usize, binary_contents: &Vec<u8>) -> Value {
             // This case is actually the complete opposite from the previous one.
             // The immediate to register MOV instruction actually does not have the R/M register
             // but has the REG register it used to move immediate values to.
@@ -448,8 +448,8 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         reg_register = get_register(true, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
     }
 
-    if instruction_has_immediate_value_in_rm_register(instruction, memory_mode) {
-        rm_immediate = get_immediate_from_rm_register(instruction, is_word_size, memory_mode, *instruction_pointer, &binary_contents)
+    if instruction_has_immediate_value_in_rm_register(instruction) {
+        rm_immediate = get_immediate_from_rm_register(instruction, is_word_size, *instruction_pointer, &binary_contents)
     } else {
         rm_register = get_register(false, instruction, memory_mode, first_byte, second_byte, is_word_size).parse().unwrap();
     }

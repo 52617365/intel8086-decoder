@@ -5,7 +5,6 @@ use crate::flag_registers::number_is_signed;
 
 
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement};
-use crate::registers::ValueEnum::Uninitialized;
 
 // The memory struct is used by the main loop to simulate memory.
 // It's simulated by holding a large array of memory structs.
@@ -122,8 +121,8 @@ pub fn load_memory_contents_as_decimal_and_optionally_update_original_value(memo
 
             if !original_8_bit_memory_location_is_initialized(memory_location) && !modified_8_bit_memory_location_is_initialized(memory_location) {
                 return decimal_memory_contents{
-                    original_value: Value{value: Uninitialized, is_signed: false},
-                    modified_value: Value{value: Uninitialized, is_signed: false}
+                    original_value: Value{value: ValueEnum::Uninitialized, is_signed: false},
+                    modified_value: Value{value: ValueEnum::Uninitialized, is_signed: false}
                 };
             }
             if !original_8_bit_memory_location_is_initialized(memory_location) && modified_8_bit_memory_location_is_initialized(memory_location) {
@@ -131,7 +130,7 @@ pub fn load_memory_contents_as_decimal_and_optionally_update_original_value(memo
                 let modified_value = ValueEnum::ByteSize(memory_location.address_contents.modified_bits.bits);
 
                 let decimal_memory_contents = decimal_memory_contents{
-                    original_value: Value{value: Uninitialized, is_signed: false},
+                    original_value: Value{value: ValueEnum::Uninitialized, is_signed: false},
                     modified_value: Value{value: modified_value, is_signed: number_is_signed(modified_value)}
                 };
 
