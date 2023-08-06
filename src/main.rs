@@ -259,7 +259,7 @@ fn main() {
     let binary_path = &args[1];
     let binary_contents = fs::read(binary_path).unwrap();
 
-    let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct{bits: 0, initialized: false}, original_bits: bits_struct{bits: 0, initialized: false}} }; 64000];
+    let mut memory: [memory_struct; 100000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct{bits: 0, initialized: false}, original_bits: bits_struct{bits: 0, initialized: false}} }; 100000];
 
     let mut registers = construct_registers();
     let op_codes = construct_opcodes();
@@ -426,7 +426,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
     panic!("We thought that the reg register contained an immediate when it did not.")
 }
 
-fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, registers: &mut Vec<Register>, flag_registers: &mut [FlagRegister; 2], memory: &mut [memory_struct; 64000], instruction_pointer: &mut usize, simulate: bool) -> instruction_data {
+fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, registers: &mut Vec<Register>, flag_registers: &mut [FlagRegister; 2], memory: &mut [memory_struct; 100000], instruction_pointer: &mut usize, simulate: bool) -> instruction_data {
     let first_byte = binary_contents[*instruction_pointer];
     let second_byte = binary_contents[*instruction_pointer + 1];
 
@@ -882,7 +882,7 @@ mod tests {
     fn test_listing_0038() {
         let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0038_many_register_mov").unwrap();
 
-        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
+        let mut memory: [memory_struct; 100000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 100000];
 
         let mut registers = construct_registers();
         let mut flag_registers = construct_flag_registers();
@@ -1003,7 +1003,7 @@ mod tests {
                 flags: vec![],
             },
         ];
-        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
+        let mut memory: [memory_struct; 100000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 100000];
 
         let mut registers = construct_registers();
         let mut flag_registers = construct_flag_registers();
@@ -1023,7 +1023,7 @@ mod tests {
     #[test]
     fn test_listing_0041() {
         let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0041_add_sub_cmp_jnz").unwrap();
-        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
+        let mut memory: [memory_struct; 100000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 100000];
 
         let mut registers = construct_registers();
         let mut flag_registers = construct_flag_registers();
@@ -1199,7 +1199,7 @@ mod tests {
                 flags: vec![],
             },
         ];
-        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
+        let mut memory: [memory_struct; 100000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 100000];
 
         let mut registers = construct_registers();
         let mut flag_registers = construct_flag_registers();
@@ -1298,7 +1298,7 @@ mod tests {
                 flags: vec![],
             },
         ];
-        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
+        let mut memory: [memory_struct; 100000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 100000];
 
         let mut registers = construct_registers();
         let mut flag_registers = construct_flag_registers();
@@ -1377,7 +1377,7 @@ mod tests {
                 flags: vec!["ZF"],
             },
         ];
-        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
+        let mut memory: [memory_struct; 100000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 100000];
 
         let mut registers = construct_registers();
         let mut flag_registers = construct_flag_registers();
@@ -1470,7 +1470,7 @@ mod tests {
             },
         ];
 
-        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
+        let mut memory: [memory_struct; 100000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 100000];
 
         let mut registers = construct_registers();
         let mut flag_registers = construct_flag_registers();
@@ -1554,7 +1554,7 @@ mod tests {
         }
     ];
 
-        let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 64000];
+        let mut memory: [memory_struct; 100000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct { bits: 0, initialized: false }, original_bits: bits_struct { bits: 0, initialized: false } } }; 100000];
 
         let mut registers = construct_registers();
         let mut flag_registers = construct_flag_registers();
