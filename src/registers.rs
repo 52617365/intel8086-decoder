@@ -1,7 +1,6 @@
 use crate::bits::{InstructionType, MemoryModeEnum};
 use crate::bits::InstructionType::*;
 use crate::flag_registers::{number_is_signed};
-use crate::is_word_size;
 
 #[derive(Copy, Clone,Debug)]
 pub enum ValueEnum {

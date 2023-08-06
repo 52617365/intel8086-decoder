@@ -166,44 +166,42 @@ pub fn store_memory_value(memory: &mut [memory_struct], memory_address: usize, d
     let mut updated_memory_address = memory_address;
     updated_memory_address += displacement;
 
-    let updated_value: Value;
-    if mnemonic == "mov" {
-        updated_value = value;
-    } else if mnemonic == "add" || mnemonic == "sub" {
-        let memory_contents: Value;
+    if mnemonic != "cmp" {
+        let mut updated_value: Value = Value{value: ValueEnum::Uninitialized, is_signed: false };
+        if mnemonic == "mov" {
+            updated_value = value;
+        } else if mnemonic == "add" || mnemonic == "sub" {
+            let memory_contents: Value;
 
-        if is_word_size {
-            let combined = combine_bytes(memory[memory_address + 1].address_contents.original_bits.bits, memory[memory_address].address_contents.original_bits.bits);
-            let val = ValueEnum::WordSize(combined);
-            memory_contents = Value{value: val, is_signed: number_is_signed(val)};
-        } else {
-            let val = ValueEnum::ByteSize(memory[memory_address].address_contents.original_bits.bits);
-            memory_contents = Value{value: val, is_signed: number_is_signed(val)};
+            if is_word_size {
+                let combined = combine_bytes(memory[memory_address + 1].address_contents.original_bits.bits, memory[memory_address].address_contents.original_bits.bits);
+                let val = ValueEnum::WordSize(combined);
+                memory_contents = Value { value: val, is_signed: number_is_signed(val) };
+            } else {
+                let val = ValueEnum::ByteSize(memory[memory_address].address_contents.original_bits.bits);
+                memory_contents = Value { value: val, is_signed: number_is_signed(val) };
+            }
+
+            if mnemonic == "add" {
+                updated_value = memory_contents.wrap_add_and_return_result(value.value);
+            } else {
+                updated_value = memory_contents.wrap_sub_and_return_result(value.value);
+            }
         }
+        if let ValueEnum::WordSize(val) = updated_value.value {
+                let memory_contents = separate_word_sized_value_into_bytes(usize::try_from(val).unwrap());
 
-        if mnemonic == "add" {
-            updated_value = memory_contents.wrap_add_and_return_result(value.value);
-        } else {
-            updated_value = memory_contents.wrap_sub_and_return_result(value.value);
-        }
-    } else {
-        panic!("store_memory_value called with cmp even though cmp does not change state.")
-    }
-    if let ValueEnum::WordSize(val) = updated_value.value {
-        if mnemonic != "cmp" {
-            let memory_contents = separate_word_sized_value_into_bytes(usize::try_from(val).unwrap());
+                memory[updated_memory_address].address_contents.modified_bits.bits = memory_contents.lower_byte;
+                memory[updated_memory_address].address_contents.modified_bits.initialized = true;
 
-            memory[updated_memory_address].address_contents.modified_bits.bits = memory_contents.lower_byte;
+                memory[updated_memory_address + 1].address_contents.modified_bits.bits = memory_contents.upper_byte;
+                memory[updated_memory_address + 1].address_contents.modified_bits.initialized = true;
+        } else if let ValueEnum::ByteSize(val) = updated_value.value {
+            memory[updated_memory_address].address_contents.modified_bits.bits = val;
             memory[updated_memory_address].address_contents.modified_bits.initialized = true;
-
-            memory[updated_memory_address + 1].address_contents.modified_bits.bits = memory_contents.upper_byte;
-            memory[updated_memory_address + 1].address_contents.modified_bits.initialized = true;
+        } else {
+            panic!("we should not get here ever");
         }
-    } else if let ValueEnum::ByteSize(val) = updated_value.value {
-        memory[updated_memory_address].address_contents.modified_bits.bits = val;
-        memory[updated_memory_address].address_contents.modified_bits.initialized = true;
-    } else {
-        panic!("we should not get here ever");
     }
 }
 

@@ -10,7 +10,9 @@ TODO: On top of the testing we want to do, we also need to support the old homew
 use bits::*;
 
 use crate::memory::{bits_struct, get_displacement, load_memory_contents_as_decimal_and_optionally_update_original_value, memory_contents, memory_struct, store_memory_value};
-use crate::bits::combine_bytes; use core::panic; use std::{env, fs};
+use crate::bits::combine_bytes;
+use core::panic;
+use std::{env, fs};
 use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumulatorCMP, ImmediateToRegisterMemory, ImmediateToRegisterMOV, ImmediateToAccumulatorSUB, RegisterMemory, JE_JUMP, JL_JUMP, JLE_JUMP, JB_JUMP, JBE_JUMP, JP_JUMP, JO_JUMP, JS_JUMP, JNE_JUMP, JNL_JUMP, LOOP, LOOPZ, JCXZ, LOOPNZ, JNS, JNO_JUMP, JNBE_JUMP, JNP_JUMP, JNB_JUMP, JNLE_JUMP};
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
@@ -265,7 +267,7 @@ fn main() {
 
     let mut old_instruction_pointer: usize = 0;
     let mut instruction_pointer: usize = 0;
-    let simulate_code = true;
+    let simulate_code = false;
     while instruction_pointer < binary_contents.len() {
         old_instruction_pointer = instruction_pointer;
         let first_byte = binary_contents[instruction_pointer];
@@ -353,7 +355,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
                         let fourth_byte = binary_contents[instruction_pointer + 3];
                         let fifth_byte = binary_contents[instruction_pointer + 4];
                         let combined = combine_bytes(fifth_byte, fourth_byte);
-                        let value = ValueEnum::WordSize(combined as u16);
+                        let value = ValueEnum::WordSize(combined);
                         return Value{
                             value,
                             is_signed: number_is_signed(value),
@@ -363,7 +365,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
                         let fifth_byte = binary_contents[instruction_pointer + 4];
                         let sixth_byte = binary_contents[instruction_pointer + 5];
                         let combined = combine_bytes(sixth_byte, fifth_byte);
-                        let value = ValueEnum::WordSize(combined as u16);
+                        let value = ValueEnum::WordSize(combined);
                         return Value{
                             value, 
                             is_signed: number_is_signed(value),
@@ -373,7 +375,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
                         let fourth_byte = binary_contents[instruction_pointer + 3];
                         let combined = combine_bytes(fourth_byte, third_byte);
 
-                        let value = ValueEnum::WordSize(combined as u16);
+                        let value = ValueEnum::WordSize(combined);
                         return Value{
                             value, 
                             is_signed: number_is_signed(value),
@@ -385,7 +387,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
                         // In this branch we guarantee that the s bit is not set. Therefore the immediate can not be a 16-bit value.
                         // With 16-bit memory mode operations the immediate is in the fifth and sixth bytes depending on the size.
                         let fifth_byte = binary_contents[instruction_pointer + 4];
-                        let value = ValueEnum::ByteSize(fifth_byte as u8);
+                        let value = ValueEnum::ByteSize(fifth_byte);
                         return Value{
                             value,
                             is_signed: number_is_signed(value),
@@ -394,7 +396,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
                     } else {
                         let third_byte = binary_contents[instruction_pointer + 2];
 
-                        let value = ValueEnum::ByteSize(third_byte as u8);
+                        let value = ValueEnum::ByteSize(third_byte);
                         return Value{
                             value, 
                             is_signed: number_is_signed(value),
@@ -790,7 +792,7 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
         // this is because we don't want to make a new variable for just one operation. The name is misleading but live with it.
 
         let ax_or_al = get_register(true, instruction, memory_mode, first_byte, second_byte, is_word_size);
-        return format!("{} {}, {}", mnemonic, ax_or_al, reg_immediate.value.get_usize());
+        return format!("{} {}, {}", mnemonic, ax_or_al, reg_immediate.get_string_number_from_bits());
     } else if instruction == RegisterMemory {
         if memory_mode == MemoryModeNoDisplacement {
             if reg_is_dest {
@@ -1015,8 +1017,130 @@ mod tests {
             decoded_instructions.push(decoded_instruction);
         }
         assert_eq!(decoded_instructions, expected_instructions);
-
-        // let expected_decoded_instructions = "mov si, bx\nmov dh, al\nmov cl, 12\nmov ch, -12\nmov cx, 12\nmov cx, -12\nmov dx, 3948\nmov dx, -3948\nmov al, [bx + si]\nmov bx, [bp + di]\nmov dx, [bp + 0]\nmov ah, [bx + si + 4]\nmov al, [bx + si + 4999]\nmov [bx + di], cx\nmov [bp + si], cl\nmov [bp + 0], ch";
-        // assert_eq!(decoded_instructions.join("\n"), expected_decoded_instructions);
     }
+}
+#[test]
+fn test_listing_0041() {
+    let binary_contents = fs::read("/Users/rase/dev/intel8086-decoder/computer_enhance/perfaware/part1/listing_0041_add_sub_cmp_jnz").unwrap();
+    let mut memory: [memory_struct; 64000] = [memory_struct { address_contents: memory_contents { modified_bits: bits_struct{bits: 0, initialized: false}, original_bits: bits_struct{bits: 0, initialized: false}} }; 64000];
+
+    let mut registers = construct_registers();
+    let flag_registers = construct_flag_registers();
+    let op_codes = construct_opcodes();
+    let mut instruction_pointer: usize = 0;
+
+    let mut decoded_instructions : Vec<String> = Vec::new();
+    while instruction_pointer < binary_contents.len() {
+        let first_byte = binary_contents[instruction_pointer];
+        let instruction = determine_instruction(&op_codes, first_byte);
+        let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, flag_registers, &mut memory, &mut instruction_pointer, false);
+        decoded_instructions.push(decoded_instruction.formatted_instruction);
+    }
+
+    let expected_instructions: Vec<&str> = vec![
+        // add instructions
+        "add bx, [bx + si]",
+        "add bx, [bp + 0]",
+        "add si, 2",
+        "add bp, 2",
+        "add cx, 8",
+        "add bx, [bp + 0]",
+        "add cx, [bx + 2]",
+        "add bh, [bp + si + 4]",
+        "add di, [bp + di + 6]",
+        "add [bx + si], bx",
+        "add [bp + 0], bx",
+        "add [bp + 0], bx",
+        "add [bx + 2], cx",
+        "add [bp + si + 4], bh",
+        "add [bp + di + 6], di",
+        "add byte [bx], 34",
+        "add word [bp + si + 1000], 29",
+        "add ax, [bp + 0]",
+        "add al, [bx + si]",
+        "add ax, bx",
+        "add al, ah",
+        "add ax, 1000",
+        "add al, -30",
+        "add al, 9",
+
+        // sub instructions
+        "sub bx, [bx + si]",
+        "sub bx, [bp + 0]",
+        "sub si, 2",
+        "sub bp, 2",
+        "sub cx, 8",
+        "sub bx, [bp + 0]",
+        "sub cx, [bx + 2]",
+        "sub bh, [bp + si + 4]",
+        "sub di, [bp + di + 6]",
+        "sub [bx + si], bx",
+        "sub [bp + 0], bx",
+        "sub [bp + 0], bx",
+        "sub [bx + 2], cx",
+        "sub [bp + si + 4], bh",
+        "sub [bp + di + 6], di",
+        "sub byte [bx], 34",
+        "sub word [bx + di], 29",
+        "sub ax, [bp + 0]",
+        "sub al, [bx + si]",
+        "sub ax, bx",
+        "sub al, ah",
+        "sub ax, 1000",
+        "sub al, -30",
+        "sub al, 9",
+
+        // cmp instructions
+        "cmp bx, [bx + si]",
+        "cmp bx, [bp + 0]",
+        "cmp si, 2",
+        "cmp bp, 2",
+        "cmp cx, 8",
+        "cmp bx, [bp + 0]",
+        "cmp cx, [bx + 2]",
+        "cmp bh, [bp + si + 4]",
+        "cmp di, [bp + di + 6]",
+        "cmp [bx + si], bx",
+        "cmp [bp + 0], bx",
+        "cmp [bp + 0], bx",
+        "cmp [bx + 2], cx",
+        "cmp [bp + si + 4], bh",
+        "cmp [bp + di + 6], di",
+        "cmp byte [bx], 34",
+        "cmp word [4834], 29",
+        "cmp ax, [bp + 0]",
+        "cmp al, [bx + si]",
+        "cmp ax, bx",
+        "cmp al, ah",
+        "cmp ax, 1000",
+        "cmp al, -30",
+        "cmp al, 9",
+
+        // labels and jump instructions
+        "jnz 2",
+        "jnz 252",
+        "jnz 250",
+        "jnz 252",
+        "je 254",
+        "jl 252",
+        "jle 250",
+        "jb 248",
+        "jbe 246",
+        "jp 244",
+        "jo 242",
+        "js 240",
+        "jnz 238",
+        "jnl 236",
+        "jg 234",
+        "jnb 232",
+        "ja 230",
+        "jnp 228",
+        "jno 226",
+        "jns 224",
+        "loop 222",
+        "loopz 220",
+        "loopnz 218",
+        "jcxz 216",
+    ];
+    assert_eq!(decoded_instructions, expected_instructions);
 }
