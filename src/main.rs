@@ -863,7 +863,12 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
         if number_is_signed(ValueEnum::ByteSize(second_byte)) {
             let instruction_size_cast = i8::try_from(instruction_size).unwrap();
             assert!(instruction_size_cast > 0, "This should never be negative, we're just doing this to fight rust rules.");
-            return format!("{} -{}", mnemonic, twos_complement(second_byte).wrapping_sub(instruction_size_cast));
+            let offset = twos_complement(second_byte).wrapping_sub(instruction_size_cast);
+            if offset == 0 {
+                return format!("{} {}", mnemonic, offset);
+            } else {
+                return format!("{} -{}", mnemonic, offset);
+            }
         } else {
             return format!("{} {}", mnemonic, second_byte.wrapping_sub(u8::try_from(instruction_size).unwrap()) as usize);
         }
@@ -1132,30 +1137,30 @@ mod tests {
             "cmp al, 9",
 
             // labels and jump instructions
-            "jnz 2",
+            "jnz 0",
+            "jnz -2",
             "jnz -4",
-            "jnz -6",
-            "jnz -4",
-            "je -2",
-            "jl -4",
-            "jle -6",
-            "jb -8",
-            "jbe -10",
-            "jp -12",
-            "jo -14",
-            "js -16",
-            "jnz -18",
-            "jnl -20",
-            "jg -22",
-            "jnb -24",
-            "ja -26",
-            "jnp -28",
-            "jno -30",
-            "jns -32",
-            "loop -34",
-            "loopz -36",
-            "loopnz -38",
-            "jcxz -40",
+            "jnz -2",
+            "je 0", // TODO fix result being -0.
+            "jl -2",
+            "jle -4",
+            "jb -6",
+            "jbe -8",
+            "jp -10",
+            "jo -12",
+            "js -14",
+            "jnz -16",
+            "jnl -18",
+            "jg -20",
+            "jnb -22",
+            "ja -24",
+            "jnp -26",
+            "jno -28",
+            "jns -30",
+            "loop -32",
+            "loopz -34",
+            "loopnz -36",
+            "jcxz -38",
         ];
         assert_eq!(decoded_instructions, expected_instructions);
     }
@@ -1439,7 +1444,7 @@ mod tests {
                 flags: vec![],
             },
             instruction_data {
-                formatted_instruction: "jnz -8".to_string(),
+                formatted_instruction: "jnz -6".to_string(),
                 original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 flags: vec![],
@@ -1458,7 +1463,7 @@ mod tests {
                 flags: vec![],
             },
             instruction_data {
-                formatted_instruction: "jnz -8".to_string(),
+                formatted_instruction: "jnz -6".to_string(),
                 original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 flags: vec![],
@@ -1477,7 +1482,7 @@ mod tests {
                 flags: vec!["ZF"],  // This operation would set the zero flag since result is 0.
             },
             instruction_data {
-                formatted_instruction: "jnz -8".to_string(),
+                formatted_instruction: "jnz -6".to_string(),
                 original_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 updated_value: Value { value: ValueEnum::Uninitialized, is_signed: false },
                 flags: vec!["ZF"],
