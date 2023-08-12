@@ -110,7 +110,6 @@ impl Value {
                 return val;
             },
             ValueEnum::Uninitialized => self,
-            // ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
         }
     }
 
@@ -123,7 +122,11 @@ impl Value {
                 },
                 ValueEnum::WordSize(val) => {
                     let twos_complement_number = self.twos_complement_16_bit(val);
-                    return format!("{}{}", "-", twos_complement_number.to_string());
+                    if twos_complement_number < 0 { // This branch is to avoid having double -'s in front of the number.
+                        return format!("{}", twos_complement_number.to_string());
+                    } else {
+                        return format!("{}{}", "-", twos_complement_number.to_string());
+                    }
                 },
                 ValueEnum::Uninitialized => panic!("this should not be uninitialized."),
             }
@@ -144,8 +147,8 @@ impl Value {
 #[derive(Copy, Clone)]
 pub struct Register {
    pub register:       &'static str,
-   pub updated_value:  Value, // Should these be a struct containing signed information instead? 
-   pub original_value: Value, // x
+   pub updated_value:  Value,
+   pub original_value: Value,
 }
 
 const REGISTERS: [&str; 16] = [
@@ -227,5 +230,11 @@ pub fn update_original_register_value(register_to_update: &'static str, value: V
         if reg.register == register_to_update {
             reg.original_value = Value { value, is_signed: number_is_signed(value) };
         }
+    }
+}
+
+pub fn print_out_state_of_all_registers(registers: Vec<Register>) {
+    for register in registers {
+        println!("\t{}: {}", register.register, register.updated_value.get_string_number_from_bits());
     }
 }

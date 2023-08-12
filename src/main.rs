@@ -5,7 +5,10 @@ mod memory;
 
 /*
 TODO: On top of the testing we want to do, we also need to support the old homework because during the newer homework, the old ones broke.
+
+
 */
+
 
 use bits::*;
 
@@ -18,7 +21,7 @@ use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
 use crate::flag_registers::{number_is_signed, twos_complement};
 use crate::bits::MemoryModeEnum::{DirectMemoryOperation, MemoryMode16Bit, MemoryMode8Bit, MemoryModeNoDisplacement, RegisterMode};
-use crate::registers::{Value, ValueEnum, construct_registers, get_register_state, Register, register_contains_multiple_registers, update_original_register_value, update_register_value};
+use crate::registers::{Value, ValueEnum, construct_registers, get_register_state, Register, register_contains_multiple_registers, update_original_register_value, update_register_value, print_out_state_of_all_registers};
 use crate::flag_registers::{construct_flag_registers, set_flags, get_all_currently_set_flags, clear_flags_registers, flag_register_is_set, FlagRegister};
 
 // W bit determines the size between 8 and 16-bits, the w bit is at different places depending on the instruction.
@@ -280,6 +283,9 @@ fn main() {
             println!("{}", decoded_instruction.formatted_instruction);
         }
     }
+    println!("\nFinal registers:");
+    print_out_state_of_all_registers(registers);
+    get_all_currently_set_flags(&mut flag_registers);
 }
 
 #[derive(Clone, Debug)]
