@@ -8,6 +8,9 @@ TODO: On top of the testing we want to do, we also need to support the old homew
 
 TODO: Listing_0052 is not working correctly.
  It seems like ip, bp and dx are the only registers that have the correct state at the end of the program.
+ I'm 99% sure we have way too many instructions in the printed instructions too. I.e. there is too many instructions going on which could lead to these weird results.
+
+
 */
 
 
