@@ -6,7 +6,8 @@ mod memory;
 /*
 TODO: On top of the testing we want to do, we also need to support the old homework because during the newer homework, the old ones broke.
 
-
+TODO: Listing_0052 is not working correctly.
+ It seems like ip, bp and dx are the only registers that have the correct state at the end of the program.
 */
 
 
@@ -285,6 +286,7 @@ fn main() {
     }
     println!("\nFinal registers:");
     print_out_state_of_all_registers(registers);
+    print!("\tip: {}", instruction_pointer);
     get_all_currently_set_flags(&mut flag_registers);
 }
 
