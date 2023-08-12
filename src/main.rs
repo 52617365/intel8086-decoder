@@ -17,6 +17,7 @@ use crate::memory::{bits_struct, get_displacement, load_memory_contents_as_decim
 use crate::bits::combine_bytes;
 use core::panic;
 use std::{env, fs};
+use std::num::Wrapping;
 use crate::bits::InstructionType::{ImmediateToAccumulatorADD, ImmediateToAccumulatorCMP, ImmediateToRegisterMemory, ImmediateToRegisterMOV, ImmediateToAccumulatorSUB, RegisterMemory, JE_JUMP, JL_JUMP, JLE_JUMP, JB_JUMP, JBE_JUMP, JP_JUMP, JO_JUMP, JS_JUMP, JNE_JUMP, JNL_JUMP, LOOP, LOOPZ, JCXZ, LOOPNZ, JNS, JNO_JUMP, JNBE_JUMP, JNP_JUMP, JNB_JUMP, JNLE_JUMP};
 use crate::bits::Masks::{D_BITS, IMMEDIATE_TO_REG_MOV_W_BIT};
 
@@ -579,7 +580,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         }
     }
 
-    let formatted_instruction = format_instruction(&binary_contents, *instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate);
+    let formatted_instruction = format_instruction(&binary_contents, *instruction_pointer, first_byte, second_byte, instruction, mnemonic, is_word_size, memory_mode, reg_is_dest, &reg_register, &rm_register, reg_immediate, rm_immediate, instruction_size);
 
 
     let instruction_details: instruction_data;
@@ -753,7 +754,7 @@ fn perform_conditional_jump(flag_registers: &mut [FlagRegister; 2], instruction_
     }
 }
 
-fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, second_byte: u8, instruction: InstructionType, mnemonic: &str, is_word_size: bool, memory_mode: MemoryModeEnum, reg_is_dest: bool, reg_register: &String, rm_register: &String, reg_immediate: Value, rm_immediate: Value) -> String {
+fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, second_byte: u8, instruction: InstructionType, mnemonic: &str, is_word_size: bool, memory_mode: MemoryModeEnum, reg_is_dest: bool, reg_register: &String, rm_register: &String, reg_immediate: Value, rm_immediate: Value, instruction_size: usize) -> String {
     if instruction == ImmediateToRegisterMemory {
         if memory_mode == MemoryModeNoDisplacement {
             if is_word_size {
@@ -857,9 +858,11 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
         || instruction == JCXZ
     {
         if number_is_signed(ValueEnum::ByteSize(second_byte)) {
-            return format!("{} -{}", mnemonic, twos_complement(second_byte));
+            let instruction_size_cast = i8::try_from(instruction_size).unwrap();
+            assert!(instruction_size_cast > 0, "This should never be negative, we're just doing this to fight rust rules.");
+            return format!("{} -{}", mnemonic, twos_complement(second_byte).wrapping_sub(instruction_size_cast));
         } else {
-            return format!("{} {}", mnemonic, second_byte as usize);
+            return format!("{} {}", mnemonic, second_byte.wrapping_sub(u8::try_from(instruction_size).unwrap()) as usize);
         }
     } else {
         panic!("Unknown instruction: {:?}, did not expect to get here.", instruction);
