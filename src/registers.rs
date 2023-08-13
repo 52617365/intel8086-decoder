@@ -38,6 +38,23 @@ impl Sub for ValueEnum {
         }
     }
 }
+
+// Implement a wrapping subtraction for ValueEnum.
+impl ValueEnum {
+    pub fn wrap_sub(&self, value_src: ValueEnum) -> ValueEnum {
+        match self {
+            ValueEnum::ByteSize(val) => {
+                let result_after_wrap = ValueEnum::ByteSize(val.wrapping_sub(value_src.get_usize() as u8));
+                return result_after_wrap;
+            },
+            ValueEnum::WordSize(val) => {
+                let result_after_wrap = ValueEnum::WordSize(val.wrapping_sub(value_src.get_usize() as u16));
+                return result_after_wrap;
+            },
+            ValueEnum::Uninitialized => panic!("Cannot subtract {:?} from {:?}", value_src, self),
+        }
+    }
+}
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value && self.is_signed == other.is_signed

@@ -5,17 +5,6 @@ mod memory;
 
 /*
 TODO: On top of the testing we want to do, we also need to support the old homework because during the newer homework, the old ones broke.
-
-TODO: Listing_0052 is not working correctly.
- It seems like ip, bp and dx are the only registers that have the correct state at the end of the program.
- I'm 99% sure we have way too many instructions in the printed instructions too. I.e. there is too many instructions going on which could lead to these weird results.
- We expect 32 instructions but we're currently getting 294917 (LOL).
-
-
- FIXME: The third jnz/jne -7 in the program is not working correctly. It should jump to mov bx, 0 but it jumped into mov word [bp + si], si.
-        I.e instruction pointer should go to 18 but it went to 9.
-        This is caused by the cmp instruction not setting the zero flag (instruction_pointer == 0xe).
-
 */
 
 
@@ -557,7 +546,8 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             if mnemonic != "mov" {
                 let mut value: ValueEnum = ValueEnum::Uninitialized;
 
-                // TODO: for listing_0052, in case of "cmp" mnemonic, we have to do a subtraction here and set the value with the result of that.
+                // TODO: for listing_0052, in case of "cmp" mnemonic, we have to do a subtraction in all the branches and set the value with the result of that.
+                // TODO: make the subtractions wrapped. Maybe implement a method for that in ValueEnum.
 
                 if instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) {
                     // rm register is always dest.
@@ -565,7 +555,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                         if mnemonic == "cmp" {
                             let combined_registers_from_rm = combine_register_containing_multiple_registers(registers, &rm_register);
                             let combined_registers_value = combined_registers_from_rm.value;
-                            let result = combined_registers_value - reg_immediate.value;
+                            let result = combined_registers_value.wrap_sub(reg_immediate.value);
                             value = result;
                         } else {
                             value = combine_register_containing_multiple_registers(registers, &rm_register).value;
@@ -573,7 +563,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                     } else {
                         if mnemonic == "cmp" {
                             let rm = get_register_state(&rm_register, registers);
-                            let result = rm.updated_value.value - reg_immediate.value;
+                            let result = rm.updated_value.value.wrap_sub(reg_immediate.value);
                             value = result;
                         } else {
                             let rm = get_register_state(&rm_register, registers);
@@ -583,17 +573,37 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                 } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
                     if memory_mode == DirectMemoryOperation {
                         if reg_is_dest {
-                            let reg = get_register_state(&reg_register, registers);
-                            value = reg.updated_value.value;
+                            if mnemonic == "cmp" {
+                                let reg = get_register_state(&reg_register, registers);
+                                let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, rm_immediate.value.get_usize(), 0, is_word_size, false);
+                                value = reg.updated_value.value.wrap_sub(memory_contents.original_value.value);
+                            } else {
+                                let reg = get_register_state(&reg_register, registers);
+                                value = reg.updated_value.value;
+                            }
                         } else {
                             let rm = get_register_state(&rm_register, registers);
-                            value = rm.updated_value.value;
+                            let memory_contents = load_memory_contents_as_decimal_and_optionally_update_original_value(memory, memory_mode, reg_immediate.value.get_usize(), 0, is_word_size, false);
+                            value = rm.updated_value.value.wrap_sub(memory_contents.modified_value.value);
                         }
+                    } else {
+                       panic!("Not implemented");
                     }
-                } else {
-                    if reg_is_dest && instruction != ImmediateToRegisterMemory {
+                }
+                if reg_is_dest && instruction != ImmediateToRegisterMemory { // FIXME: This is a weird ass branch lol, smelly code.
+                    if mnemonic == "cmp" {
+                        let reg = get_register_state(&reg_register, registers);
+                        let rm = get_register_state(&rm_register, registers);
+                        value = reg.updated_value.value.wrap_sub(rm.updated_value.value);
+                    } else {
                         let reg = get_register_state(&reg_register, registers);
                         value = reg.updated_value.value;
+                    }
+                } else {
+                    if mnemonic == "cmp" {
+                        let rm = get_register_state(&rm_register, registers);
+                        let reg = get_register_state(&reg_register, registers);
+                        value = rm.updated_value.value.wrap_sub(reg.updated_value.value);
                     } else {
                         let rm = get_register_state(&rm_register, registers);
                         value = rm.updated_value.value;
