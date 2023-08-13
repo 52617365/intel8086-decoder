@@ -843,8 +843,6 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
         return format!("{} {}, {}", mnemonic, ax_or_al, reg_immediate.get_string_number_from_bits());
     } else if instruction == RegisterMemory {
         if memory_mode == MemoryModeNoDisplacement {
-            // TODO in listing_0052 we hit a branch here which is mov word [bp + si], si but we get mov [bp + si], si without the word.
-            //  Now when we explicitly add the word here, previous tests fail, what gives..
             if reg_is_dest{
                 return format!("{} {}, [{}]", mnemonic, reg_register, rm_register)
             } else {
