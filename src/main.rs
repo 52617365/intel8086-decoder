@@ -9,7 +9,12 @@ TODO: On top of the testing we want to do, we also need to support the old homew
 TODO: Listing_0052 is not working correctly.
  It seems like ip, bp and dx are the only registers that have the correct state at the end of the program.
  I'm 99% sure we have way too many instructions in the printed instructions too. I.e. there is too many instructions going on which could lead to these weird results.
+ We expect 32 instructions but we're currently getting 294917 (LOL).
 
+
+ FIXME: The third jnz/jne -7 in the program is not working correctly. It should jump to mov bx, 0 but it jumped into mov word [bp + si], si.
+        I.e instruction pointer should go to 18 but it went to 9.
+        This is caused by the cmp instruction not setting the zero flag (instruction_pointer == 0xe).
 
 */
 
@@ -276,7 +281,9 @@ fn main() {
     let mut old_instruction_pointer: usize = 0;
     let mut instruction_pointer: usize = 0;
     let simulate_code = true;
+    let mut instruction_count = 0;
     while instruction_pointer < binary_contents.len() {
+        instruction_count += 1;
         old_instruction_pointer = instruction_pointer;
         let first_byte = binary_contents[instruction_pointer];
         let instruction = determine_instruction(&op_codes, first_byte);
@@ -292,6 +299,8 @@ fn main() {
     print_out_state_of_all_registers(registers);
     print!("\tip: {}", instruction_pointer);
     get_all_currently_set_flags(&mut flag_registers);
+
+    println!("\nInstruction count: {}", instruction_count);
 }
 
 #[derive(Clone, Debug)]
@@ -548,6 +557,8 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             if mnemonic != "mov" {
                 let mut value: ValueEnum = ValueEnum::Uninitialized;
 
+                // TODO: for listing_0052, in case of "cmp" mnemonic, we have to do a subtraction here and set the value with the result of that.
+
                 if instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) {
                     // rm register is always dest.
                     if register_contains_multiple_registers(&rm_register) {
@@ -686,14 +697,16 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
     }
 
 
-    if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
-        let reg = get_register_state(&reg_register, &registers);
-        update_original_register_value(reg.register, reg.updated_value.value, registers);
-    } else if instruction_uses_memory(memory_mode) {
-        // TODO: fill
-    } else {
-        let rm = get_register_state(&rm_register, &registers);
-        update_original_register_value(rm.register, rm.updated_value.value, registers);
+    if !instruction_is_conditional_jump(instruction) {
+        if reg_is_dest && instruction != ImmediateToRegisterMemory || instruction == ImmediateToRegisterMOV {
+            let reg = get_register_state(&reg_register, &registers);
+            update_original_register_value(reg.register, reg.updated_value.value, registers);
+        } else if instruction_uses_memory(memory_mode) {
+            // TODO: fill
+        } else {
+            let rm = get_register_state(&rm_register, &registers);
+            update_original_register_value(rm.register, rm.updated_value.value, registers);
+        }
     }
 
     assert_ne!(instruction_details.formatted_instruction, "", "instruction_details struct is not initialized, this should never happen.");
@@ -767,7 +780,6 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
             }
         } else if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
             let displacement = get_displacement(binary_contents, ip, memory_mode);
-            // let displacement = get_8_bit_displacement(binary_contents, ip);
             if is_word_size {
                 return format!("{} word [{} + {}], {}", mnemonic, rm_register, displacement, reg_immediate.get_string_number_from_bits());
             } else {
@@ -811,10 +823,18 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
         return format!("{} {}, {}", mnemonic, ax_or_al, reg_immediate.get_string_number_from_bits());
     } else if instruction == RegisterMemory {
         if memory_mode == MemoryModeNoDisplacement {
-            if reg_is_dest {
-                return format!("{} {}, [{}]", mnemonic, reg_register, rm_register)
+            if is_word_size {
+                if reg_is_dest {
+                    return format!("{} {}, word [{}]", mnemonic, reg_register, rm_register)
+                } else {
+                    return format!("{} word [{}], {}", mnemonic, rm_register, reg_register)
+                }
             } else {
-                return format!("{} [{}], {}", mnemonic, rm_register, reg_register)
+                if reg_is_dest {
+                    return format!("{} {}, [{}]", mnemonic, reg_register, rm_register)
+                } else {
+                    return format!("{} [{}], {}", mnemonic, rm_register, reg_register)
+                }
             }
         } else if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
             let displacement = get_displacement(binary_contents, ip, memory_mode);
