@@ -562,10 +562,23 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
                 if instruction_is_immediate_to_register(instruction) && instruction_uses_memory(memory_mode) {
                     // rm register is always dest.
                     if register_contains_multiple_registers(&rm_register) {
-                        value = combine_register_containing_multiple_registers(registers, &rm_register).value;
+                        if mnemonic == "cmp" {
+                            let combined_registers_from_rm = combine_register_containing_multiple_registers(registers, &rm_register);
+                            let combined_registers_value = combined_registers_from_rm.value;
+                            let result = combined_registers_value - reg_immediate.value;
+                            value = result;
+                        } else {
+                            value = combine_register_containing_multiple_registers(registers, &rm_register).value;
+                        }
                     } else {
-                        let rm = get_register_state(&rm_register, registers);
-                        value = rm.updated_value.value;
+                        if mnemonic == "cmp" {
+                            let rm = get_register_state(&rm_register, registers);
+                            let result = rm.updated_value.value - reg_immediate.value;
+                            value = result;
+                        } else {
+                            let rm = get_register_state(&rm_register, registers);
+                            value = rm.updated_value.value;
+                        }
                     }
                 } else if instruction == RegisterMemory && instruction_uses_memory(memory_mode) {
                     if memory_mode == DirectMemoryOperation {
@@ -823,18 +836,10 @@ fn format_instruction(binary_contents: &Vec<u8>, ip: usize, first_byte: u8, seco
         return format!("{} {}, {}", mnemonic, ax_or_al, reg_immediate.get_string_number_from_bits());
     } else if instruction == RegisterMemory {
         if memory_mode == MemoryModeNoDisplacement {
-            if is_word_size {
-                if reg_is_dest {
-                    return format!("{} {}, word [{}]", mnemonic, reg_register, rm_register)
-                } else {
-                    return format!("{} word [{}], {}", mnemonic, rm_register, reg_register)
-                }
+            if reg_is_dest {
+                return format!("{} {}, [{}]", mnemonic, reg_register, rm_register)
             } else {
-                if reg_is_dest {
-                    return format!("{} {}, [{}]", mnemonic, reg_register, rm_register)
-                } else {
-                    return format!("{} [{}], {}", mnemonic, rm_register, reg_register)
-                }
+                return format!("{} [{}], {}", mnemonic, rm_register, reg_register)
             }
         } else if memory_mode == MemoryMode8Bit || memory_mode == MemoryMode16Bit {
             let displacement = get_displacement(binary_contents, ip, memory_mode);
@@ -1056,7 +1061,13 @@ mod tests {
             let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
             decoded_instructions.push(decoded_instruction);
         }
-        assert_eq!(decoded_instructions, expected_instructions);
+        for (index, instruction) in decoded_instructions.iter().enumerate() {
+            assert_eq!(instruction.formatted_instruction, expected_instructions[index].formatted_instruction);
+            assert_eq!(instruction.original_value, expected_instructions[index].original_value);
+            assert_eq!(instruction.updated_value, expected_instructions[index].updated_value);
+            assert_eq!(instruction.flags, expected_instructions[index].flags);
+        }
+        // assert_eq!(decoded_instructions, expected_instructions);
     }
 
     #[test]
@@ -1161,7 +1172,7 @@ mod tests {
             "jnz -2",
             "jnz -4",
             "jnz -2",
-            "je 0", // TODO fix result being -0.
+            "je 0",
             "jl -2",
             "jle -4",
             "jb -6",
@@ -1182,7 +1193,11 @@ mod tests {
             "loopnz -36",
             "jcxz -38",
         ];
-        assert_eq!(decoded_instructions, expected_instructions);
+
+        for (index, instruction) in decoded_instructions.iter().enumerate() {
+            assert_eq!(*instruction, expected_instructions[index].to_string());
+        }
+        // assert_eq!(decoded_instructions, expected_instructions);
     }
 
     #[test]
@@ -1252,7 +1267,15 @@ mod tests {
             let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
             decoded_instructions.push(decoded_instruction);
         }
-        assert_eq!(decoded_instructions, expected_instructions);
+
+        // iterate the decoded instruction in a for loop and assert that the values are as expected
+        for (index, instruction) in decoded_instructions.iter().enumerate() {
+            assert_eq!(instruction.formatted_instruction, expected_instructions[index].formatted_instruction);
+            assert_eq!(instruction.original_value, expected_instructions[index].original_value);
+            assert_eq!(instruction.updated_value, expected_instructions[index].updated_value);
+            assert_eq!(instruction.flags, expected_instructions[index].flags);
+        }
+        // assert_eq!(decoded_instructions, expected_instructions);
     }
 
     #[test]

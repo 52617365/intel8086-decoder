@@ -51,11 +51,7 @@ pub fn set_is_set_for_flag_register(flag: &'static str, flag_registers: &mut [Fl
 }
 
 pub fn set_flags(destination_value: ValueEnum, flag_registers: &mut [FlagRegister; 2]) -> () {
-    let destination_value_integer = match destination_value {
-        ValueEnum::ByteSize(val) => val as usize,
-        ValueEnum::WordSize(val) => val as usize,
-        ValueEnum::Uninitialized => return,
-    };
+    let destination_value_integer = destination_value.get_usize();
 
     if destination_value_integer == 0 {
         set_is_set_for_flag_register("ZF", flag_registers, true);

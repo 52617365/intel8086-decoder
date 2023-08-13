@@ -1,3 +1,4 @@
+use std::ops::Sub;
 use crate::bits::{InstructionType, MemoryModeEnum};
 use crate::bits::InstructionType::*;
 use crate::flag_registers::{number_is_signed};
@@ -26,6 +27,17 @@ impl PartialEq for ValueEnum {
     }
 }
 
+impl Sub for ValueEnum {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (ValueEnum::ByteSize(a), ValueEnum::ByteSize(b)) => ValueEnum::ByteSize(a - b),
+            (ValueEnum::WordSize(a), ValueEnum::WordSize(b)) => ValueEnum::WordSize(a - b),
+            _ => panic!("Cannot subtract {:?} from {:?}", rhs, self),
+        }
+    }
+}
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value && self.is_signed == other.is_signed
