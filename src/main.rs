@@ -276,7 +276,7 @@ fn main() {
         old_instruction_pointer = instruction_pointer;
         let first_byte = binary_contents[instruction_pointer];
         let instruction = determine_instruction(&op_codes, first_byte);
-        let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, simulate_code);
+        let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, simulate_code, false);
 
         if simulate_code {
             println!("{} | {} -> {} | flags: {:?}, IP: {} -> {}", decoded_instruction.formatted_instruction, decoded_instruction.original_value.get_string_number_from_bits(), decoded_instruction.updated_value.get_string_number_from_bits(), decoded_instruction.flags, old_instruction_pointer, instruction_pointer);
@@ -436,7 +436,7 @@ fn get_immediate_from_reg_register(mnemonic: &str, instruction: InstructionType,
     panic!("We thought that the reg register contained an immediate when it did not.")
 }
 
-fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, registers: &mut Vec<Register>, flag_registers: &mut [FlagRegister; 2], memory: &mut [memory_struct; 100000], instruction_pointer: &mut usize, simulate: bool) -> instruction_data {
+fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, registers: &mut Vec<Register>, flag_registers: &mut [FlagRegister; 2], memory: &mut [memory_struct; 100000], instruction_pointer: &mut usize, simulate: bool, calculate_cycles: bool) -> instruction_data {
     let first_byte = binary_contents[*instruction_pointer];
     let second_byte = binary_contents[*instruction_pointer + 1];
 
@@ -722,7 +722,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
             let reg = get_register_state(&reg_register, &registers);
             update_original_register_value(reg.register, reg.updated_value.value, registers);
         } else if instruction_uses_memory(memory_mode) {
-            // TODO: fill
+            // NOTE: I don't think we even need to fill this.
         } else {
             let rm = get_register_state(&rm_register, &registers);
             update_original_register_value(rm.register, rm.updated_value.value, registers);
@@ -737,8 +737,20 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
         *instruction_pointer += instruction_size;
     }
 
+    if calculate_cycles {
 
+    }
+
+    // TODO: calculate cycles here and add it into instruction details.
+    //  sum this integer in the main loop into some variable and keep track of the total cycles.
     return instruction_details;
+}
+
+
+// TODO: add the logic into this function to know the estimation of how many cpu cycles each instruction takes.
+//  This information is known in the Intel8086 page 67.
+//  https://edge.edx.org/c4x/BITSPilani/EEE231/asset/8086_family_Users_Manual_1_.pdf
+fn determine_cycle_time(instruction: InstructionType, mnemonic: &'static str, memory_mode: MemoryModeEnum) {
 }
 
 // This function extracts the registers from for example a bx + si instruction into bx, si and returns it.
@@ -949,7 +961,7 @@ mod tests {
             let first_byte = binary_contents[instruction_pointer];
             // let second_byte = binary_contents[instruction_pointer + 1];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, false);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, false, false);
 
             decoded_instructions.push(decoded_instruction.formatted_instruction);
         }
@@ -1069,7 +1081,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true, false);
             decoded_instructions.push(decoded_instruction);
         }
         for (index, instruction) in decoded_instructions.iter().enumerate() {
@@ -1095,7 +1107,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, false);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, false, false);
             decoded_instructions.push(decoded_instruction.formatted_instruction);
         }
 
@@ -1275,7 +1287,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true, false);
             decoded_instructions.push(decoded_instruction);
         }
 
@@ -1382,7 +1394,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true, false);
             decoded_instructions.push(decoded_instruction);
         }
         assert_eq!(decoded_instructions, expected_instructions);
@@ -1461,7 +1473,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true, false);
             decoded_instructions.push(decoded_instruction);
         }
         assert_eq!(decoded_instructions, expected_instructions);
@@ -1554,7 +1566,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true, false);
             decoded_instructions.push(decoded_instruction);
         }
         assert_eq!(decoded_instructions, expected_instructions);
@@ -1638,7 +1650,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true, false);
             decoded_instructions.push(decoded_instruction);
         }
         assert_eq!(decoded_instructions, expected_instructions);
@@ -1856,7 +1868,7 @@ mod tests {
         while instruction_pointer < binary_contents.len() {
             let first_byte = binary_contents[instruction_pointer];
             let instruction = determine_instruction(&op_codes, first_byte);
-            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true);
+            let decoded_instruction = decode_instruction(&binary_contents, instruction, &mut registers, &mut flag_registers, &mut memory, &mut instruction_pointer, true, false);
             decoded_instructions.push(decoded_instruction);
         }
 
