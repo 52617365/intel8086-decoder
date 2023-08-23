@@ -750,7 +750,55 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
 // TODO: add the logic into this function to know the estimation of how many cpu cycles each instruction takes.
 //  This information is known in the Intel8086 page 67.
 //  https://edge.edx.org/c4x/BITSPilani/EEE231/asset/8086_family_Users_Manual_1_.pdf
-fn determine_cycle_time(instruction: InstructionType, mnemonic: &'static str, memory_mode: MemoryModeEnum) {
+fn calculate_cycles(instruction: InstructionType, mnemonic: &'static str, memory_mode: MemoryModeEnum, reg_is_dest: bool) -> usize {
+    if instruction == RegisterMemory {
+        if memory_mode == RegisterMode {
+            if mnemonic == "mov" {
+                return 2;
+            } else {
+                return 3;
+            }
+        } else if instruction_uses_memory(memory_mode) {
+            if mnemonic == "mov" {
+                if reg_is_dest {
+                   return 8; // TODO: calculate the EA.
+                } else {
+                    return 9; // TODO: calculate the EA.
+                }
+            } else if mnemonic == "cmp" {
+                return 9; // TODO: calculate the EA.
+            } else {
+                if reg_is_dest {
+                    return 9; // TODO: calculate the EA.
+                } else {
+                    return 16; // TODO: calculate the EA.
+                }
+            }
+        } else {
+            panic!("Why did we even get here?")
+        }
+    } else if instruction == ImmediateToRegisterMemory {
+        if memory_mode == RegisterMode {
+            return 4;
+        } else if instruction_uses_memory(memory_mode) {
+            if mnemonic == "mov" || mnemonic == "cmp" {
+                return 10; // TODO: calculate EA
+            } else {
+                return 17; // TODO: calculate EA
+            }
+        } else {
+            panic!("Why did we even get here?")
+        }
+    } else if instruction == ImmediateToRegisterMOV {
+        return 4;
+    } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorCMP || instruction == ImmediateToAccumulatorSUB {
+        return 4
+    } else {
+        panic!("Why did we even get here? This should be handled.")
+    }
+
+
+
 }
 
 // This function extracts the registers from for example a bx + si instruction into bx, si and returns it.
