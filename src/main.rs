@@ -750,7 +750,7 @@ fn decode_instruction(binary_contents: &Vec<u8>, instruction: InstructionType, r
 // TODO: add the logic into this function to know the estimation of how many cpu cycles each instruction takes.
 //  This information is known in the Intel8086 page 67.
 //  https://edge.edx.org/c4x/BITSPilani/EEE231/asset/8086_family_Users_Manual_1_.pdf
-fn calculate_cycles(instruction: InstructionType, mnemonic: &'static str, memory_mode: MemoryModeEnum, reg_is_dest: bool) -> usize {
+fn calculate_cycles(instruction: InstructionType, mnemonic: &'static str, memory_mode: MemoryModeEnum, reg_is_dest: bool, flags: Vec<FlagRegister>) -> usize {
     if instruction == RegisterMemory {
         if memory_mode == RegisterMode {
             if mnemonic == "mov" {
@@ -793,7 +793,68 @@ fn calculate_cycles(instruction: InstructionType, mnemonic: &'static str, memory
         return 4;
     } else if instruction == ImmediateToAccumulatorADD || instruction == ImmediateToAccumulatorCMP || instruction == ImmediateToAccumulatorSUB {
         return 4
-    } else {
+    } else if instruction == JE_JUMP {
+        // TODO: check flag registers because if jump, 16.
+        return 4;
+    } else if instruction == JL_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JLE_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JB_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JBE_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JP_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JO_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JS_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JNE_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JNL_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JNLE_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JNB_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JNBE_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JNP_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JNO_JUMP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JNS {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == LOOP {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == LOOPZ {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == LOOPNZ {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    } else if instruction == JCXZ {
+        return 4;
+        // TODO: check flag registers because if jump, 16.
+    }
+    else {
         panic!("Why did we even get here? This should be handled.")
     }
 
